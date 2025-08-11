@@ -36,7 +36,6 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     super.dispose();
   }
 
-  // NEW: Helper function to format the string
   String _capitalizeFirstLetter(String text) {
     if (text.isEmpty) return "";
     return "${text[0].toUpperCase()}${text.substring(1).toLowerCase()}";
@@ -228,6 +227,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                       summaryMap: productSummary,
                       onTap: (productName) {
                         setState(() {
+                          _isStockSummaryExpanded = true;
                           _selectedProductForBreakdown = productName;
                         });
                       },
@@ -311,6 +311,48 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     );
   }
 
+  Future<void> _confirmDelete(BuildContext context, Receipt receipt) async {
+    final bool? confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text(
+          'Are you sure you want to delete Receipt #${receipt.receiptNumber}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _firestoreService.deleteReceipt(receipt.id!);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipt deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting receipt: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildReceiptCard(Receipt receipt) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -331,7 +373,6 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                         fontWeight: FontWeight.normal,
                       ),
                       children: [
-                        // MODIFIED: Using the new helper function here
                         TextSpan(
                           text:
                               '${_capitalizeFirstLetter(receipt.coldStorageName)} : ',
@@ -352,7 +393,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              "${_capitalizeFirstLetter(receipt.productName)} - ${receipt.brandName.toUpperCase()}",
+              "${receipt.productName} - ${receipt.brandName}",
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
@@ -368,11 +409,32 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                   'Inward Qty',
                   receipt.inwardQuantity.toString(),
                 ),
-                _buildInfoColumn('Rate', '₹${receipt.rate.toStringAsFixed(0)}'),
+                _buildInfoColumn('Rate', '₹${receipt.rate.toStringAsFixed(2)}'),
                 _buildInfoColumn(
                   'Remaining',
                   receipt.remainingQuantity.toString(),
                   isEnd: true,
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                  tooltip: 'Edit Receipt',
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      AppRouter.receiptEntry,
+                      arguments: receipt,
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  tooltip: 'Delete Receipt',
+                  onPressed: () => _confirmDelete(context, receipt),
                 ),
               ],
             ),

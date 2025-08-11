@@ -100,6 +100,15 @@ class FirestoreService {
 
     return query.docs.isNotEmpty;
   }
+  /// Updates an existing receipt document in Firestore.
+  Future<void> updateReceipt(String id, Map<String, dynamic> data) {
+    return _db.collection('receipts').doc(id).update(data);
+  }
+
+  /// Deletes a receipt document from Firestore.
+  Future<void> deleteReceipt(String id) {
+    return _db.collection('receipts').doc(id).delete();
+  }
 
   // ─── Generic Master Data ────────────────────────────────────────────────
 

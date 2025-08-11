@@ -14,6 +14,7 @@ import 'screens/masters/masters_menu_screen.dart';
 import 'screens/masters/cold_storage_master_screen.dart';
 import 'screens/masters/product_master_screen.dart';
 import 'screens/masters/brand_master_screen.dart';
+import 'package:business_management_app/models/receipt_model.dart';
 
 class AppRouter {
   static const authGate = '/';
@@ -42,8 +43,10 @@ class AppRouter {
           builder: (_) => screenBuilder(const DashboardScreen()),
         );
       case receiptEntry:
+        // MODIFIED: Check if a Receipt object is being passed as an argument
+        final receipt = settings.arguments as Receipt?;
         return MaterialPageRoute(
-          builder: (_) => screenBuilder(const ReceiptEntryScreen()),
+          builder: (_) => screenBuilder(ReceiptEntryScreen(receipt: receipt)),
         );
       case receiptList:
         return MaterialPageRoute(

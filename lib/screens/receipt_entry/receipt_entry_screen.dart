@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:another_flushbar/flushbar.dart';
-
-import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/models/receipt_model.dart';
+import 'package:business_management_app/services/firestore_service.dart';
 
 enum MasterType { coldStorage, product, brand }
 
 class ReceiptEntryScreen extends StatefulWidget {
-  const ReceiptEntryScreen({super.key});
+  final Receipt? receipt;
+
+  const ReceiptEntryScreen({super.key, this.receipt});
 
   @override
   State<ReceiptEntryScreen> createState() => _ReceiptEntryScreenState();
@@ -53,11 +54,35 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
 
+  bool get _isEditMode => widget.receipt != null;
+
   @override
   void initState() {
     super.initState();
-    _dateController.text = DateFormat('dd-MM-yy').format(_selectedDate);
     _fetchMasterData();
+
+    if (_isEditMode) {
+      _populateFieldsForEdit();
+    } else {
+      _dateController.text = DateFormat('dd-MM-yy').format(_selectedDate);
+    }
+  }
+
+  void _populateFieldsForEdit() {
+    final r = widget.receipt!;
+    _receiptNumberController.text = r.receiptNumber;
+    _coldStorageController.text = r.coldStorageName;
+    _productController.text = r.productName;
+    _brandController.text = r.brandName;
+    _quantityController.text = r.inwardQuantity.toString();
+    _rateController.text = r.rate.toString();
+    _narrationController.text = r.narration;
+    _dateController.text = DateFormat('dd-MM-yy').format(r.inwardDate.toDate());
+
+    _selectedDate = r.inwardDate.toDate();
+    _selectedColdStorage = r.coldStorageName;
+    _selectedProduct = r.productName;
+    _selectedBrand = r.brandName;
   }
 
   @override
@@ -154,11 +179,10 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     FocusScope.of(context).requestFocus(node);
   }
 
-  Future<void> _saveReceipt() async {
+  Future<void> _saveOrUpdateReceipt() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
     if (_selectedColdStorage == null) {
       _showValidationError(
         'Please select a valid Cold Storage.',
@@ -178,62 +202,73 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final receiptNumber = _receiptNumberController.text;
-      final int quantity = int.parse(_quantityController.text);
+      if (_isEditMode) {
+        final updatedData = {
+          'productName': _selectedProduct!,
+          'brandName': _selectedBrand!,
+          'inwardQuantity': int.parse(_quantityController.text),
+          'rate': double.parse(_rateController.text),
+          'narration': _narrationController.text.trim(),
+          'inwardDate': Timestamp.fromDate(_selectedDate),
+        };
 
-      final bool isDuplicate = await _firestoreService.doesReceiptExist(
-        receiptNumber,
-        _selectedColdStorage!,
-      );
-
-      if (isDuplicate) {
-        _showTopFlushbar(
-          'Receipt #$receiptNumber already exists for this cold storage.',
-          isError: true,
+        await _firestoreService.updateReceipt(widget.receipt!.id!, updatedData);
+        _showTopFlushbar('Receipt updated successfully.');
+        Navigator.of(context).pop();
+      } else {
+        final receiptNumber = _receiptNumberController.text;
+        final int quantity = int.parse(_quantityController.text);
+        final bool isDuplicate = await _firestoreService.doesReceiptExist(
+          receiptNumber,
+          _selectedColdStorage!,
         );
-        setState(() => _isSaving = false);
-        return;
+
+        if (isDuplicate) {
+          _showTopFlushbar(
+            'Receipt #$receiptNumber already exists for this cold storage.',
+            isError: true,
+          );
+          setState(() => _isSaving = false);
+          return;
+        }
+
+        final newReceipt = Receipt(
+          receiptNumber: receiptNumber,
+          coldStorageName: _selectedColdStorage!,
+          inwardDate: Timestamp.fromDate(_selectedDate),
+          productName: _selectedProduct!,
+          brandName: _selectedBrand!,
+          inwardQuantity: quantity,
+          remainingQuantity: quantity,
+          rate: double.parse(_rateController.text),
+          narration: _narrationController.text.trim(),
+        );
+
+        await _firestoreService.addReceipt(newReceipt.toJson());
+        _showTopFlushbar(
+          'Receipt #$receiptNumber has been saved successfully.',
+        );
+
+        _formKey.currentState!.reset();
+        _receiptNumberController.clear();
+        _coldStorageController.clear();
+        _productController.clear();
+        _brandController.clear();
+        _quantityController.clear();
+        _rateController.clear();
+        _narrationController.clear();
+
+        setState(() {
+          _selectedDate = DateTime.now();
+          _dateController.text = DateFormat('dd-MM-yy').format(_selectedDate);
+          _selectedColdStorage = null;
+          _selectedProduct = null;
+          _selectedBrand = null;
+        });
+        FocusScope.of(context).requestFocus(_receiptNumberFocusNode);
       }
-
-      // MODIFIED: Create an instance of our new Receipt model
-      final newReceipt = Receipt(
-        receiptNumber: receiptNumber,
-        coldStorageName: _selectedColdStorage!,
-        inwardDate: Timestamp.fromDate(_selectedDate),
-        productName: _selectedProduct!,
-        brandName: _selectedBrand!,
-        inwardQuantity: quantity,
-        remainingQuantity: quantity, // Initially the same
-        rate: double.parse(_rateController.text),
-        narration: _narrationController.text.trim(),
-        // The other fields have default values
-      );
-
-      // Save the receipt to Firebase using the toJson() method
-      await _firestoreService.addReceipt(newReceipt.toJson());
-
-      _showTopFlushbar('Receipt #$receiptNumber has been saved successfully.');
-
-      // Reset form for next entry
-      _formKey.currentState!.reset();
-      _receiptNumberController.clear();
-      _coldStorageController.clear();
-      _productController.clear();
-      _brandController.clear();
-      _quantityController.clear();
-      _rateController.clear();
-      _narrationController.clear();
-
-      setState(() {
-        _selectedDate = DateTime.now();
-        _dateController.text = DateFormat('dd-MM-yy').format(_selectedDate);
-        _selectedColdStorage = null;
-        _selectedProduct = null;
-        _selectedBrand = null;
-      });
-      FocusScope.of(context).requestFocus(_receiptNumberFocusNode);
     } catch (e) {
-      _showTopFlushbar('Error saving receipt: $e', isError: true);
+      _showTopFlushbar('Error: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -265,11 +300,9 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
 
   Future<void> _handleAddNewItem(MasterType type, String newName) async {
     setState(() => _isSaving = true);
-
     String collectionName;
     List<String> optionsList;
     String label;
-
     switch (type) {
       case MasterType.coldStorage:
         collectionName = 'cold_storages';
@@ -287,7 +320,6 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         label = 'Brand';
         break;
     }
-
     if (optionsList.any((o) => o.toLowerCase() == newName.toLowerCase())) {
       final existingOption = optionsList.firstWhere(
         (o) => o.toLowerCase() == newName.toLowerCase(),
@@ -299,10 +331,8 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       setState(() => _isSaving = false);
       return;
     }
-
     try {
       await _firestoreService.addMasterItem(collectionName, newName);
-
       setState(() {
         optionsList.add(newName);
         optionsList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -334,7 +364,9 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New Receipt Entry')),
+      appBar: AppBar(
+        title: Text(_isEditMode ? 'Edit Receipt' : 'New Receipt Entry'),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -349,7 +381,8 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                       TextFormField(
                         controller: _receiptNumberController,
                         focusNode: _receiptNumberFocusNode,
-                        autofocus: true,
+                        enabled: !_isEditMode,
+                        autofocus: !_isEditMode,
                         decoration: const InputDecoration(
                           labelText: 'Receipt Number',
                         ),
@@ -372,6 +405,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                         labelText: 'Cold Storage',
                         options: _coldStorageOptions,
                         nextFocusNode: _dateFocusNode,
+                        enabled: !_isEditMode,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -401,7 +435,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                             ).parseStrict(value);
                             setState(() => _selectedDate = date);
                           } catch (e) {
-                            /* Ignore parsing errors while typing */
+                            /* Ignore */
                           }
                         },
                         onFieldSubmitted: (_) => FocusScope.of(
@@ -480,7 +514,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                       const SizedBox(height: 24),
                       ElevatedButton(
                         focusNode: _saveButtonFocusNode,
-                        onPressed: _isSaving ? null : _saveReceipt,
+                        onPressed: _isSaving ? null : _saveOrUpdateReceipt,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           textStyle: const TextStyle(fontSize: 16),
@@ -494,7 +528,9 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Save Receipt'),
+                            : Text(
+                                _isEditMode ? 'Update Receipt' : 'Save Receipt',
+                              ),
                       ),
                     ],
                   ),
@@ -511,28 +547,25 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     required String labelText,
     required List<String> options,
     required FocusNode nextFocusNode,
+    bool enabled = true,
   }) {
     return RawAutocomplete<String>(
       focusNode: focusNode,
       textEditingController: controller,
       optionsBuilder: (TextEditingValue textEditingValue) {
-        final String query = textEditingValue.text;
-        if (query.isEmpty) {
+        if (!enabled || textEditingValue.text.isEmpty) {
           return const Iterable<String>.empty();
         }
-        final String lowerCaseQuery = query.toLowerCase();
-        final filteredOptions = options.where((String option) {
-          return option.toLowerCase().contains(lowerCaseQuery);
-        });
-
+        final String lowerCaseQuery = textEditingValue.text.toLowerCase();
+        final filteredOptions = options.where(
+          (String option) => option.toLowerCase().contains(lowerCaseQuery),
+        );
         final bool isNew = !options.any(
           (element) => element.toLowerCase() == lowerCaseQuery,
         );
-
-        if (isNew && query.isNotEmpty) {
-          return [...filteredOptions, 'Add "$query"'];
+        if (isNew && textEditingValue.text.isNotEmpty) {
+          return [...filteredOptions, 'Add "${textEditingValue.text}"'];
         }
-
         return filteredOptions;
       },
       onSelected: (String selection) {
@@ -553,7 +586,12 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
             return TextFormField(
               controller: fieldTextEditingController,
               focusNode: fieldFocusNode,
-              decoration: InputDecoration(labelText: labelText),
+              enabled: enabled,
+              decoration: InputDecoration(
+                labelText: labelText,
+                filled: !enabled,
+                fillColor: !enabled ? Colors.grey.shade200 : null,
+              ),
               onChanged: (value) => _handleTextChanged(masterType, value),
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -585,7 +623,6 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                     itemBuilder: (BuildContext context, int index) {
                       final String option = options.elementAt(index);
                       final bool isAddNewOption = option.startsWith('Add "');
-
                       return ListTile(
                         title: Text(
                           option,
