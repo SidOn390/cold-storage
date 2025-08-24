@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:business_management_app/models/receipt_model.dart';
 import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/app_router.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
 
 class ReceiptListScreen extends StatefulWidget {
   const ReceiptListScreen({super.key});
@@ -336,19 +337,21 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     if (confirm == true) {
       try {
         await _firestoreService.deleteReceipt(receipt.id!);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipt deleted successfully.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Receipt deleted successfully.',
+            type: NotificationType.error,
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting receipt: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Error deleting receipt: $e',
+            type: NotificationType.error,
+          );
+        }
       }
     }
   }
@@ -423,12 +426,20 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blueGrey),
                   tooltip: 'Edit Receipt',
-                  onPressed: () {
-                    Navigator.pushNamed(
+                  onPressed: () async {
+                    final result = await Navigator.pushNamed(
                       context,
                       AppRouter.receiptEntry,
                       arguments: receipt,
                     );
+
+                    if (result == true && context.mounted) {
+                      showAppNotification(
+                        context: context,
+                        message: 'Receipt updated successfully.',
+                        type: NotificationType.info,
+                      );
+                    }
                   },
                 ),
                 IconButton(

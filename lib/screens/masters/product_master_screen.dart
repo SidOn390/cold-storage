@@ -2,14 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../services/firestore_service.dart';
+import 'package:business_management_app/services/firestore_service.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
 
 class ProductMasterScreen extends StatefulWidget {
   const ProductMasterScreen({Key? key}) : super(key: key);
 
   @override
-  _ProductMasterScreenState createState() =>
-      _ProductMasterScreenState();
+  _ProductMasterScreenState createState() => _ProductMasterScreenState();
 }
 
 class _ProductMasterScreenState extends State<ProductMasterScreen> {
@@ -36,14 +36,6 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
     super.dispose();
   }
 
-  SnackBar _snack(String message, Color background) => SnackBar(
-    content: Text(message),
-    backgroundColor: background,
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.all(16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
-
   Widget _buildShimmer() {
     return ListView.builder(
       itemCount: 6,
@@ -65,14 +57,14 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
     );
   }
 
-  Future<void> _showDialog({String? id, String? initialName}) async {
+  Future<bool?> _showDialog({String? id, String? initialName}) async {
     _editingId = id;
     _textCtrl.text = initialName ?? '';
     _isProcessing = false;
 
-    await showDialog(
+    return await showDialog<bool>(
       context: context,
-      builder: (ctx) {
+      builder: (dialogContext) {
         String? errorText;
         return StatefulBuilder(
           builder: (context, setState) {
@@ -92,10 +84,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _editingId = null;
-                  },
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -128,12 +117,6 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                                 return;
                               }
                               await _firestore.addProduct(name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Product Added successfully',
-                                  Colors.green,
-                                ),
-                              );
                             } else {
                               final original =
                                   existing.firstWhere(
@@ -150,20 +133,21 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                                 return;
                               }
                               await _firestore.updateProduct(id, name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Product Updated successfully',
-                                  Colors.blue,
-                                ),
+                            }
+                            Navigator.of(dialogContext).pop(true);
+                          } catch (e) {
+                            if (mounted) {
+                              showAppNotification(
+                                context: context,
+                                message: 'Error: $e',
+                                type: NotificationType.error,
                               );
                             }
-                            Navigator.of(ctx).pop();
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')),
-                            );
+                            Navigator.of(dialogContext).pop(false);
                           } finally {
-                            setState(() => _isProcessing = false);
+                            if (mounted) {
+                              setState(() => _isProcessing = false);
+                            }
                           }
                         },
                   child: Text(id == null ? 'Add' : 'Save'),
@@ -176,7 +160,20 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
     );
   }
 
-  Future<void> _confirmDelete(String id) async {
+  Future<void> _confirmDelete(String id, String name) async {
+    final bool isInUse = await _firestore.isProductInUse(name);
+
+    if (!mounted) return;
+
+    if (isInUse) {
+      showAppNotification(
+        context: context,
+        message: '"$name" cannot be deleted as it is in use.',
+        type: NotificationType.error,
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -195,10 +192,24 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
       ),
     );
     if (confirm == true) {
-      await _firestore.deleteProduct(id);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(_snack('Deleted successfully', Colors.red));
+      try {
+        await _firestore.deleteProduct(id);
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Product deleted successfully',
+            type: NotificationType.error,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Error deleting product: $e',
+            type: NotificationType.error,
+          );
+        }
+      }
     }
   }
 
@@ -234,21 +245,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                 stream: _firestore.getProducts(),
                 builder: (context, snap) {
                   if (snap.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error, size: 48, color: Colors.red),
-                          const SizedBox(height: 8),
-                          Text('Error: ${snap.error}'),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => setState(() {}),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    );
+                    return Center(child: Text('Error: ${snap.error}'));
                   }
                   if (snap.connectionState == ConnectionState.waiting) {
                     return _buildShimmer();
@@ -266,16 +263,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                     ),
                   );
                   if (items.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.inbox, size: 64, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('No Product yet'),
-                        ],
-                      ),
-                    );
+                    return const Center(child: Text('No Product yet'));
                   }
                   return ListView.separated(
                     itemCount: items.length,
@@ -284,28 +272,46 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                       final item = items[i];
                       return ListTile(
                         title: Text(item['name'] as String),
-                        onTap: () => _showDialog(
-                          id: item['id'] as String,
-                          initialName: item['name'] as String,
-                        ),
+                        onTap: () async {
+                          final success = await _showDialog(
+                            id: item['id'] as String,
+                            initialName: item['name'] as String,
+                          );
+                          if (success == true && mounted) {
+                            showAppNotification(
+                              context: context,
+                              message: 'Product updated successfully',
+                              type: NotificationType.info,
+                            );
+                          }
+                        },
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit),
-                              tooltip:
-                                  'Edit ${item['name']}', // same as Cold Storage :contentReference[oaicite:4]{index=4}
-                              onPressed: () => _showDialog(
-                                id: item['id'] as String,
-                                initialName: item['name'] as String,
-                              ),
+                              tooltip: 'Edit ${item['name']}',
+                              onPressed: () async {
+                                final success = await _showDialog(
+                                  id: item['id'] as String,
+                                  initialName: item['name'] as String,
+                                );
+                                if (success == true && mounted) {
+                                  showAppNotification(
+                                    context: context,
+                                    message: 'Product updated successfully',
+                                    type: NotificationType.info,
+                                  );
+                                }
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete),
-                              tooltip:
-                                  'Delete ${item['name']}', // :contentReference[oaicite:5]{index=5}
-                              onPressed: () =>
-                                  _confirmDelete(item['id'] as String),
+                              tooltip: 'Delete ${item['name']}',
+                              onPressed: () => _confirmDelete(
+                                item['id'] as String,
+                                item['name'] as String,
+                              ),
                             ),
                           ],
                         ),
@@ -319,7 +325,16 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showDialog(),
+        onPressed: () async {
+          final success = await _showDialog();
+          if (success == true && mounted) {
+            showAppNotification(
+              context: context,
+              message: 'Product added successfully',
+              type: NotificationType.success,
+            );
+          }
+        },
         tooltip: 'Add Product',
         child: const Icon(Icons.add),
       ),

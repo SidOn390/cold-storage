@@ -100,6 +100,7 @@ class FirestoreService {
 
     return query.docs.isNotEmpty;
   }
+
   /// Updates an existing receipt document in Firestore.
   Future<void> updateReceipt(String id, Map<String, dynamic> data) {
     return _db.collection('receipts').doc(id).update(data);
@@ -131,5 +132,36 @@ class FirestoreService {
     } catch (e) {
       rethrow;
     }
+  }
+  // Add these methods to your FirestoreService class
+
+  /// Checks if a given brand name is used in any receipt.
+  Future<bool> isBrandInUse(String brandName) async {
+    final querySnapshot = await _db
+        .collection('receipts')
+        .where('brandName', isEqualTo: brandName)
+        .limit(1)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
+  }
+
+  /// Checks if a given product name is used in any receipt.
+  Future<bool> isProductInUse(String productName) async {
+    final querySnapshot = await _db
+        .collection('receipts')
+        .where('productName', isEqualTo: productName)
+        .limit(1)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
+  }
+
+  /// Checks if a given cold storage name is used in any receipt.
+  Future<bool> isColdStorageInUse(String coldStorageName) async {
+    final querySnapshot = await _db
+        .collection('receipts')
+        .where('coldStorageName', isEqualTo: coldStorageName)
+        .limit(1)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
   }
 }

@@ -4,9 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:another_flushbar/flushbar.dart';
 import 'package:business_management_app/models/receipt_model.dart';
 import 'package:business_management_app/services/firestore_service.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
 
 enum MasterType { coldStorage, product, brand }
 
@@ -114,48 +114,30 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       final productsList = await _firestoreService.getProducts().first;
       final brandsList = await _firestoreService.getBrands().first;
 
-      setState(() {
-        _coldStorageOptions =
-            storagesList.map((map) => map['name'] as String).toList()
-              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        _productOptions =
-            productsList.map((map) => map['name'] as String).toList()
-              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        _brandOptions = brandsList.map((map) => map['name'] as String).toList()
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
-        _showTopFlushbar('Error fetching master data: $e', isError: true);
+        setState(() {
+          _coldStorageOptions =
+              storagesList.map((map) => map['name'] as String).toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _productOptions =
+              productsList.map((map) => map['name'] as String).toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _brandOptions =
+              brandsList.map((map) => map['name'] as String).toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        showAppNotification(
+          context: context,
+          message: 'Error fetching master data: $e',
+          type: NotificationType.error,
+        );
       }
     }
-  }
-
-  void _showTopFlushbar(String message, {bool isError = false}) {
-    if (!mounted) return;
-    Flushbar(
-      title: isError ? "An Error Occurred" : "Success",
-      message: message,
-      duration: const Duration(seconds: 4),
-      flushbarPosition: FlushbarPosition.TOP,
-      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
-      icon: Icon(
-        isError ? Icons.error_outline : Icons.check_circle_outline,
-        size: 28.0,
-        color: Colors.white,
-      ),
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-      boxShadows: const [
-        BoxShadow(
-          color: Colors.black45,
-          offset: Offset(0.0, 2.0),
-          blurRadius: 3.0,
-        ),
-      ],
-    ).show(context);
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -175,7 +157,11 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   }
 
   void _showValidationError(String message, FocusNode node) {
-    _showTopFlushbar(message, isError: true);
+    showAppNotification(
+      context: context,
+      message: message,
+      type: NotificationType.error,
+    );
     FocusScope.of(context).requestFocus(node);
   }
 
@@ -199,22 +185,39 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       return;
     }
 
+    final navigator = Navigator.of(context);
     setState(() => _isSaving = true);
 
     try {
       if (_isEditMode) {
+        final newInwardQuantity = int.parse(_quantityController.text);
+        final dispatchedQuantity =
+            widget.receipt!.inwardQuantity - widget.receipt!.remainingQuantity;
+        final newRemainingQuantity = newInwardQuantity - dispatchedQuantity;
+
+        if (newRemainingQuantity < 0) {
+          showAppNotification(
+            context: context,
+            message:
+                'Update failed: New quantity cannot be less than the already dispatched quantity ($dispatchedQuantity).',
+            type: NotificationType.error,
+          );
+          if (mounted) setState(() => _isSaving = false);
+          return;
+        }
+
         final updatedData = {
           'productName': _selectedProduct!,
           'brandName': _selectedBrand!,
-          'inwardQuantity': int.parse(_quantityController.text),
+          'inwardQuantity': newInwardQuantity,
+          'remainingQuantity': newRemainingQuantity,
           'rate': double.parse(_rateController.text),
           'narration': _narrationController.text.trim(),
           'inwardDate': Timestamp.fromDate(_selectedDate),
         };
 
         await _firestoreService.updateReceipt(widget.receipt!.id!, updatedData);
-        _showTopFlushbar('Receipt updated successfully.');
-        Navigator.of(context).pop();
+        navigator.pop(true);
       } else {
         final receiptNumber = _receiptNumberController.text;
         final int quantity = int.parse(_quantityController.text);
@@ -222,13 +225,14 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           receiptNumber,
           _selectedColdStorage!,
         );
-
         if (isDuplicate) {
-          _showTopFlushbar(
-            'Receipt #$receiptNumber already exists for this cold storage.',
-            isError: true,
+          showAppNotification(
+            context: context,
+            message:
+                'Receipt #$receiptNumber already exists for this cold storage.',
+            type: NotificationType.error,
           );
-          setState(() => _isSaving = false);
+          if (mounted) setState(() => _isSaving = false);
           return;
         }
 
@@ -245,8 +249,10 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         );
 
         await _firestoreService.addReceipt(newReceipt.toJson());
-        _showTopFlushbar(
-          'Receipt #$receiptNumber has been saved successfully.',
+        showAppNotification(
+          context: context,
+          message: 'Receipt #$receiptNumber has been saved successfully.',
+          type: NotificationType.success,
         );
 
         _formKey.currentState!.reset();
@@ -264,13 +270,17 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           _selectedColdStorage = null;
           _selectedProduct = null;
           _selectedBrand = null;
+          _isSaving = false;
         });
         FocusScope.of(context).requestFocus(_receiptNumberFocusNode);
       }
     } catch (e) {
-      _showTopFlushbar('Error: $e', isError: true);
-    } finally {
       if (mounted) {
+        showAppNotification(
+          context: context,
+          message: 'Error: $e',
+          type: NotificationType.error,
+        );
         setState(() => _isSaving = false);
       }
     }
@@ -324,23 +334,39 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       final existingOption = optionsList.firstWhere(
         (o) => o.toLowerCase() == newName.toLowerCase(),
       );
-      _showTopFlushbar(
-        '"$existingOption" already exists and has been selected.',
+      showAppNotification(
+        context: context,
+        message: '"$existingOption" already exists and has been selected.',
+        type: NotificationType.info,
       );
       _handleSelection(type, existingOption);
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
       return;
     }
     try {
       await _firestoreService.addMasterItem(collectionName, newName);
-      setState(() {
-        optionsList.add(newName);
-        optionsList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      });
+      if (mounted) {
+        setState(() {
+          optionsList.add(newName);
+          optionsList.sort(
+            (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+          );
+        });
+      }
       _handleSelection(type, newName);
-      _showTopFlushbar('$label "$newName" added successfully.');
+      showAppNotification(
+        context: context,
+        message: '$label "$newName" added successfully.',
+        type: NotificationType.success,
+      );
     } catch (e) {
-      _showTopFlushbar('Error adding new $label: $e', isError: true);
+      if (mounted) {
+        showAppNotification(
+          context: context,
+          message: 'Error adding new $label: $e',
+          type: NotificationType.error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -411,6 +437,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                       TextFormField(
                         focusNode: _dateFocusNode,
                         controller: _dateController,
+                        autofocus: _isEditMode,
                         decoration: InputDecoration(
                           labelText: 'Inward Date',
                           suffixIcon: IconButton(

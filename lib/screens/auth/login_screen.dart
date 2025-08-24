@@ -1,8 +1,11 @@
+// lib/screens/login/login_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/auth_service.dart';
-import '../../utils/auth_utils.dart';
+// --- CHANGE: Use package imports ---
+import 'package:business_management_app/services/auth_service.dart';
+import 'package:business_management_app/utils/auth_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -74,6 +77,10 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
+    // Unfocus fields to hide keyboard
+    _userFocus.unfocus();
+    _passFocus.unfocus();
+
     // Inline validation
     setState(() {
       _usernameError = _usernameCtrl.text.trim().isEmpty;
@@ -115,9 +122,11 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (_) {
       _error = 'Unexpected error occurred';
     } finally {
-      setState(() {
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -163,6 +172,14 @@ class _LoginScreenState extends State<LoginScreen>
                         TextField(
                           controller: _usernameCtrl,
                           focusNode: _userFocus,
+                          autofocus:
+                              true, // --- ADDED: Autofocus on username ---
+                          textInputAction: TextInputAction
+                              .next, // --- ADDED: Show "next" on keyboard ---
+                          onSubmitted: (_) {
+                            // --- ADDED: Move to password field on "next" ---
+                            FocusScope.of(context).requestFocus(_passFocus);
+                          },
                           decoration: InputDecoration(
                             labelText: 'Username',
                             prefixIcon: const Icon(
@@ -178,6 +195,14 @@ class _LoginScreenState extends State<LoginScreen>
                           controller: _passCtrl,
                           focusNode: _passFocus,
                           obscureText: _obscurePassword,
+                          textInputAction: TextInputAction
+                              .done, // --- ADDED: Show "done" on keyboard ---
+                          onSubmitted: (_) {
+                            // --- ADDED: Attempt login on "done" ---
+                            if (!_loading) {
+                              _login();
+                            }
+                          },
                           decoration: InputDecoration(
                             labelText: 'Password',
                             prefixIcon: const Icon(
@@ -234,21 +259,19 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
-                            onPressed:
-                                (_usernameCtrl.text.trim().isEmpty ||
-                                    _passCtrl.text.isEmpty ||
-                                    _loading)
-                                ? null
-                                : _login,
+                            onPressed: _loading ? null : _login,
                             child: _loading
                                 ? const SizedBox(
                                     width: 24,
                                     height: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
+                                      color: Colors
+                                          .white, // --- IMPROVED: Set color to white
                                     ),
                                   )
-                                : Text(
+                                : const Text(
+                                    // --- IMPROVED: Added const
                                     'Log In',
                                     style: TextStyle(color: Colors.white),
                                   ),

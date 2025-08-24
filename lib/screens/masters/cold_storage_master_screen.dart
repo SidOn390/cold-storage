@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../services/firestore_service.dart';
+import 'package:business_management_app/services/firestore_service.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
 
 class ColdStorageMasterScreen extends StatefulWidget {
   const ColdStorageMasterScreen({Key? key}) : super(key: key);
@@ -36,14 +37,6 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
     super.dispose();
   }
 
-  SnackBar _snack(String message, Color background) => SnackBar(
-    content: Text(message),
-    backgroundColor: background,
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.all(16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
-
   Widget _buildShimmer() {
     return ListView.builder(
       itemCount: 6,
@@ -65,12 +58,12 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
     );
   }
 
-  Future<void> _showDialog({String? id, String? initialName}) async {
+  Future<bool?> _showDialog({String? id, String? initialName}) async {
     _editingId = id;
     _textCtrl.text = initialName ?? '';
     _isProcessing = false;
 
-    await showDialog(
+    return await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         String? errorText;
@@ -96,10 +89,7 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                    _editingId = null;
-                  },
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -132,12 +122,6 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                                 return;
                               }
                               await _firestore.addColdStorage(name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Cold Storage Added successfully',
-                                  Colors.green,
-                                ),
-                              );
                             } else {
                               final original =
                                   existing.firstWhere(
@@ -154,20 +138,21 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                                 return;
                               }
                               await _firestore.updateColdStorage(id, name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Cold Storage Updated successfully',
-                                  Colors.blue,
-                                ),
+                            }
+                            Navigator.of(dialogContext).pop(true);
+                          } catch (e) {
+                            if (mounted) {
+                              showAppNotification(
+                                context: context,
+                                message: 'Error: $e',
+                                type: NotificationType.error,
                               );
                             }
-                            Navigator.of(dialogContext).pop();
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')),
-                            );
+                            Navigator.of(dialogContext).pop(false);
                           } finally {
-                            setState(() => _isProcessing = false);
+                            if (mounted) {
+                              setState(() => _isProcessing = false);
+                            }
                           }
                         },
                   child: Text(id == null ? 'Add' : 'Save'),
@@ -180,7 +165,22 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
     );
   }
 
-  Future<void> _confirmDelete(String id) async {
+  Future<void> _confirmDelete(String id, String name) async {
+    // First, check if the item is in use.
+    final bool isInUse = await _firestore.isColdStorageInUse(name);
+
+    if (!mounted) return; // Guard against async gaps
+
+    if (isInUse) {
+      showAppNotification(
+        context: context,
+        message: '"$name" cannot be deleted as it is in use.',
+        type: NotificationType.error,
+      );
+      return; // Stop the deletion process
+    }
+
+    // If not in use, proceed with confirmation dialog.
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -199,10 +199,24 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
       ),
     );
     if (confirm == true) {
-      await _firestore.deleteColdStorage(id);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(_snack('Cold Storage Deleted successfully', Colors.red));
+      try {
+        await _firestore.deleteColdStorage(id);
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Cold Storage deleted successfully',
+            type: NotificationType.error,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Error deleting storage: $e',
+            type: NotificationType.error,
+          );
+        }
+      }
     }
   }
 
@@ -238,21 +252,7 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                 stream: _firestore.getColdStorages(),
                 builder: (context, snap) {
                   if (snap.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error, size: 48, color: Colors.red),
-                          const SizedBox(height: 8),
-                          Text('Error: ${snap.error}'),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => setState(() {}),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    );
+                    return Center(child: Text('Error: ${snap.error}'));
                   }
                   if (snap.connectionState == ConnectionState.waiting) {
                     return _buildShimmer();
@@ -269,17 +269,9 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                       (b['name'] as String).toLowerCase(),
                     ),
                   );
+
                   if (items.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.inbox, size: 64, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('No storages yet'),
-                        ],
-                      ),
-                    );
+                    return const Center(child: Text('No storages yet'));
                   }
                   return ListView.separated(
                     itemCount: items.length,
@@ -288,26 +280,47 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                       final item = items[i];
                       return ListTile(
                         title: Text(item['name'] as String),
-                        onTap: () => _showDialog(
-                          id: item['id'] as String,
-                          initialName: item['name'] as String,
-                        ),
+                        onTap: () async {
+                          final success = await _showDialog(
+                            id: item['id'] as String,
+                            initialName: item['name'] as String,
+                          );
+                          if (success == true && mounted) {
+                            showAppNotification(
+                              context: context,
+                              message: 'Cold Storage updated successfully',
+                              type: NotificationType.info,
+                            );
+                          }
+                        },
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit),
                               tooltip: 'Edit ${item['name']}',
-                              onPressed: () => _showDialog(
-                                id: item['id'] as String,
-                                initialName: item['name'] as String,
-                              ),
+                              onPressed: () async {
+                                final success = await _showDialog(
+                                  id: item['id'] as String,
+                                  initialName: item['name'] as String,
+                                );
+                                if (success == true && mounted) {
+                                  showAppNotification(
+                                    context: context,
+                                    message:
+                                        'Cold Storage updated successfully',
+                                    type: NotificationType.info,
+                                  );
+                                }
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete),
                               tooltip: 'Delete ${item['name']}',
-                              onPressed: () =>
-                                  _confirmDelete(item['id'] as String),
+                              onPressed: () => _confirmDelete(
+                                item['id'] as String,
+                                item['name'] as String,
+                              ),
                             ),
                           ],
                         ),
@@ -321,7 +334,16 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showDialog(),
+        onPressed: () async {
+          final success = await _showDialog();
+          if (success == true && mounted) {
+            showAppNotification(
+              context: context,
+              message: 'Cold Storage added successfully',
+              type: NotificationType.success,
+            );
+          }
+        },
         tooltip: 'Add Cold Storage',
         child: const Icon(Icons.add),
       ),

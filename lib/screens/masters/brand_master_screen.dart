@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../services/firestore_service.dart';
+import 'package:business_management_app/services/firestore_service.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
 
 class BrandMasterScreen extends StatefulWidget {
   const BrandMasterScreen({Key? key}) : super(key: key);
@@ -35,15 +36,8 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
     super.dispose();
   }
 
-  SnackBar _snack(String message, Color background) => SnackBar(
-    content: Text(message),
-    backgroundColor: background,
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.all(16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
-
   Widget _buildShimmer() {
+    // ... (This method is unchanged)
     return ListView.builder(
       itemCount: 6,
       itemBuilder: (_, __) => Padding(
@@ -64,14 +58,15 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
     );
   }
 
-  Future<void> _showDialog({String? id, String? initialName}) async {
+  Future<bool?> _showDialog({String? id, String? initialName}) async {
+    // ... (This method is unchanged from the last fix)
     _editingId = id;
     _textCtrl.text = initialName ?? '';
     _isProcessing = false;
 
-    await showDialog(
+    return await showDialog<bool>(
       context: context,
-      builder: (ctx) {
+      builder: (dialogContext) {
         String? errorText;
         return StatefulBuilder(
           builder: (context, setState) {
@@ -91,10 +86,7 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _editingId = null;
-                  },
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -125,12 +117,6 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
                                 return;
                               }
                               await _firestore.addBrand(name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Brand Added successfully',
-                                  Colors.green,
-                                ),
-                              );
                             } else {
                               final original =
                                   existing.firstWhere(
@@ -147,20 +133,21 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
                                 return;
                               }
                               await _firestore.updateBrand(id, name);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                _snack(
-                                  'Brand Updated successfully',
-                                  Colors.blue,
-                                ),
+                            }
+                            Navigator.of(dialogContext).pop(true);
+                          } catch (e) {
+                            if (mounted) {
+                              showAppNotification(
+                                context: context,
+                                message: 'Error: $e',
+                                type: NotificationType.error,
                               );
                             }
-                            Navigator.of(ctx).pop();
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: \$e')),
-                            );
+                            Navigator.of(dialogContext).pop(false);
                           } finally {
-                            setState(() => _isProcessing = false);
+                            if (mounted) {
+                              setState(() => _isProcessing = false);
+                            }
                           }
                         },
                   child: Text(id == null ? 'Add' : 'Save'),
@@ -173,7 +160,8 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
     );
   }
 
-  Future<void> _confirmDelete(String id) async {
+  // --- KEY CHANGE 1: Update the method to accept the 'name' ---
+  Future<void> _confirmDelete(String id, String name) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -191,11 +179,41 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
         ],
       ),
     );
+
     if (confirm == true) {
-      await _firestore.deleteBrand(id);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(_snack('Brand Deleted successfully', Colors.red));
+      try {
+        // --- KEY CHANGE 2: Perform the check before deleting ---
+        final bool isInUse = await _firestore.isBrandInUse(name);
+
+        if (isInUse) {
+          if (mounted) {
+            showAppNotification(
+              context: context,
+              message: '"$name" cannot be deleted as it is in use.',
+              type: NotificationType.error,
+            );
+          }
+          return; // Stop the deletion
+        }
+
+        // If not in use, proceed with deletion
+        await _firestore.deleteBrand(id);
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Brand deleted successfully',
+            type: NotificationType.error,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Error deleting brand: $e',
+            type: NotificationType.error,
+          );
+        }
+      }
     }
   }
 
@@ -208,6 +226,7 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // ... (Search bar is unchanged)
             TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
@@ -230,22 +249,9 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _firestore.getBrands(),
                 builder: (context, snap) {
+                  // ... (Error and loading states are unchanged)
                   if (snap.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error, size: 48, color: Colors.red),
-                          const SizedBox(height: 8),
-                          Text('Error: \${snap.error}'),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => setState(() {}),
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    );
+                    return Center(child: Text('Error: ${snap.error}'));
                   }
                   if (snap.connectionState == ConnectionState.waiting) {
                     return _buildShimmer();
@@ -263,16 +269,7 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
                     ),
                   );
                   if (items.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.inbox, size: 64, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('No brands yet'),
-                        ],
-                      ),
-                    );
+                    return const Center(child: Text('No brands yet'));
                   }
                   return ListView.separated(
                     itemCount: items.length,
@@ -281,26 +278,47 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
                       final item = items[i];
                       return ListTile(
                         title: Text(item['name'] as String),
-                        onTap: () => _showDialog(
-                          id: item['id'] as String,
-                          initialName: item['name'] as String,
-                        ),
+                        onTap: () async {
+                          final success = await _showDialog(
+                            id: item['id'] as String,
+                            initialName: item['name'] as String,
+                          );
+                          if (success == true && mounted) {
+                            showAppNotification(
+                              context: context,
+                              message: 'Brand updated successfully',
+                              type: NotificationType.info,
+                            );
+                          }
+                        },
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit),
                               tooltip: 'Edit ${item['name']}',
-                              onPressed: () => _showDialog(
-                                id: item['id'] as String,
-                                initialName: item['name'] as String,
-                              ),
+                              onPressed: () async {
+                                final success = await _showDialog(
+                                  id: item['id'] as String,
+                                  initialName: item['name'] as String,
+                                );
+                                if (success == true && mounted) {
+                                  showAppNotification(
+                                    context: context,
+                                    message: 'Brand updated successfully',
+                                    type: NotificationType.info,
+                                  );
+                                }
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete),
                               tooltip: 'Delete ${item['name']}',
-                              onPressed: () =>
-                                  _confirmDelete(item['id'] as String),
+                              // --- KEY CHANGE 3: Pass both id and name ---
+                              onPressed: () => _confirmDelete(
+                                item['id'] as String,
+                                item['name'] as String,
+                              ),
                             ),
                           ],
                         ),
@@ -314,7 +332,16 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showDialog(),
+        onPressed: () async {
+          final success = await _showDialog();
+          if (success == true && mounted) {
+            showAppNotification(
+              context: context,
+              message: 'Brand added successfully',
+              type: NotificationType.success,
+            );
+          }
+        },
         tooltip: 'Add Brand',
         child: const Icon(Icons.add),
       ),
