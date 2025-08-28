@@ -3,9 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// --- CHANGE: Use package imports ---
 import 'package:business_management_app/services/auth_service.dart';
-import 'package:business_management_app/utils/auth_utils.dart';
+import 'package:business_management_app/utils/app_notifications.dart';
+import 'package:business_management_app/theme/app_theme.dart';
+import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,16 +17,15 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameCtrl = TextEditingController();
   final TextEditingController _passCtrl = TextEditingController();
   final FocusNode _userFocus = FocusNode();
   final FocusNode _passFocus = FocusNode();
+
   bool _loading = false;
-  String? _error;
   bool _rememberMe = false;
   bool _obscurePassword = true;
-  bool _usernameError = false;
-  bool _passwordError = false;
 
   late final AnimationController _animController = AnimationController(
     vsync: this,
@@ -37,31 +37,10 @@ class _LoginScreenState extends State<LoginScreen>
     curve: Curves.easeIn,
   );
 
-  // Brand colors
-  final Color _primaryColor = Colors.teal;
-  final Color _accentColor = Colors.tealAccent;
-
   @override
   void initState() {
     super.initState();
-
-    _animController.forward();
     _loadRememberMe();
-
-    _userFocus.addListener(() {
-      if (!_userFocus.hasFocus) {
-        setState(() {
-          _usernameError = _usernameCtrl.text.trim().isEmpty;
-        });
-      }
-    });
-    _passFocus.addListener(() {
-      if (!_passFocus.hasFocus) {
-        setState(() {
-          _passwordError = _passCtrl.text.isEmpty;
-        });
-      }
-    });
   }
 
   Future<void> _loadRememberMe() async {
@@ -77,17 +56,12 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
-    // Unfocus fields to hide keyboard
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     _userFocus.unfocus();
     _passFocus.unfocus();
-
-    // Inline validation
-    setState(() {
-      _usernameError = _usernameCtrl.text.trim().isEmpty;
-      _passwordError = _passCtrl.text.isEmpty;
-      _error = null;
-    });
-    if (_usernameError || _passwordError) return;
 
     setState(() {
       _loading = true;
@@ -109,18 +83,32 @@ class _LoginScreenState extends State<LoginScreen>
         await prefs.remove('password');
       }
     } on FirebaseAuthException catch (e) {
+      String errorMessage;
       switch (e.code) {
         case 'user-not-found':
-          _error = 'No user found';
+          errorMessage = 'No user found with that username.';
           break;
         case 'wrong-password':
-          _error = 'Incorrect password';
+          errorMessage = 'Incorrect password provided.';
           break;
         default:
-          _error = 'Invalid username or password';
+          errorMessage = 'Invalid username or password.';
+      }
+      if (mounted) {
+        showAppNotification(
+          context: context,
+          message: errorMessage,
+          type: NotificationType.error,
+        );
       }
     } catch (_) {
-      _error = 'Unexpected error occurred';
+      if (mounted) {
+        showAppNotification(
+          context: context,
+          message: 'An unexpected error occurred.',
+          type: NotificationType.error,
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -143,147 +131,139 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Log In'),
-        backgroundColor: _primaryColor,
-      ),
-      body: Center(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth < 400
-                ? constraints.maxWidth * 0.9
-                : 400.0;
-            return FadeTransition(
-              opacity: _fadeAnim,
-              child: SizedBox(
-                width: width,
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  margin: const EdgeInsets.all(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextField(
-                          controller: _usernameCtrl,
-                          focusNode: _userFocus,
-                          autofocus:
-                              true, // --- ADDED: Autofocus on username ---
-                          textInputAction: TextInputAction
-                              .next, // --- ADDED: Show "next" on keyboard ---
-                          onSubmitted: (_) {
-                            // --- ADDED: Move to password field on "next" ---
-                            FocusScope.of(context).requestFocus(_passFocus);
-                          },
-                          decoration: InputDecoration(
-                            labelText: 'Username',
-                            prefixIcon: const Icon(
-                              Icons.person,
-                              semanticLabel: 'Username',
-                            ),
-                            errorText: _usernameError ? 'Required' : null,
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _passCtrl,
-                          focusNode: _passFocus,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction
-                              .done, // --- ADDED: Show "done" on keyboard ---
-                          onSubmitted: (_) {
-                            // --- ADDED: Attempt login on "done" ---
-                            if (!_loading) {
-                              _login();
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(
-                              Icons.lock,
-                              semanticLabel: 'Password',
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                semanticLabel: _obscurePassword
-                                    ? 'Show password'
-                                    : 'Hide password',
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
-                            errorText: _passwordError ? 'Required' : null,
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
+      // 2. Set background to transparent
+      backgroundColor: Colors.transparent,
+      // 3. Wrap the body with the AppBackground widget
+      body: AppBackground(
+        child: Center(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth < 400
+                  ? constraints.maxWidth * 0.9
+                  : 400.0;
+              return FadeTransition(
+                opacity: _fadeAnim,
+                child: SizedBox(
+                  width: width,
+                  child: Card(
+                    margin: const EdgeInsets.all(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 32,
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Checkbox(
-                              value: _rememberMe,
-                              activeColor: _primaryColor,
-                              onChanged: (value) => setState(() {
-                                _rememberMe = value ?? false;
-                              }),
+                            Icon(
+                              Icons.terrain,
+                              size: 64,
+                              color: AppColors.primary.withOpacity(0.8),
                             ),
-                            const Text('Remember me'),
+                            const SizedBox(height: 8),
+                            const Text(
+                              ' COLD STORAGE',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            TextFormField(
+                              controller: _usernameCtrl,
+                              focusNode: _userFocus,
+                              autofocus: true,
+                              textInputAction: TextInputAction.next,
+                              onFieldSubmitted: (_) {
+                                FocusScope.of(context).requestFocus(_passFocus);
+                              },
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter your username';
+                                }
+                                return null;
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Username',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _passCtrl,
+                              focusNode: _passFocus,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) {
+                                if (!_loading) {
+                                  _login();
+                                }
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your password';
+                                }
+                                return null;
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) => setState(() {
+                                    _rememberMe = value ?? false;
+                                  }),
+                                ),
+                                const Text('Remember me'),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _login,
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('LOG IN'),
+                              ),
+                            ),
                           ],
                         ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _primaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            onPressed: _loading ? null : _login,
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors
-                                          .white, // --- IMPROVED: Set color to white
-                                    ),
-                                  )
-                                : const Text(
-                                    // --- IMPROVED: Added const
-                                    'Log In',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

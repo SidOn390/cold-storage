@@ -2,61 +2,71 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../services/auth_service.dart';
-import '../../app_router.dart';
+import 'package:business_management_app/services/auth_service.dart';
+import 'package:business_management_app/app_router.dart';
+import 'package:business_management_app/theme/app_theme.dart';
+import 'package:business_management_app/widgets/app_background.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({Key? key}) : super(key: key);
 
+  String _capitalize(String s) {
+    if (s.isEmpty) return s;
+    return s[0].toUpperCase() + s.substring(1);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Extract username from email
     final user = FirebaseAuth.instance.currentUser;
     final email = user?.email ?? '';
     final username = email.contains('@') ? email.split('@').first : email;
-    final greeting = 'Hello, $username';
+    final greeting = 'Welcome back, ${_capitalize(username)}!';
 
     final items = <_DashboardItem>[
       _DashboardItem(
         title: 'Receipt Entry',
-        icon: Icons.receipt_long,
+        icon: Icons.receipt_long_outlined,
         route: AppRouter.receiptEntry,
       ),
       _DashboardItem(
         title: 'Receipt List',
-        icon: Icons.list_alt,
+        icon: Icons.list_alt_outlined,
         route: AppRouter.receiptList,
       ),
       _DashboardItem(
         title: 'Delivery Entry',
-        icon: Icons.delivery_dining,
+        icon: Icons.delivery_dining_outlined,
         route: AppRouter.deliveryEntry,
       ),
       _DashboardItem(
         title: 'Delivery History',
-        icon: Icons.history,
+        icon: Icons.history_outlined,
         route: AppRouter.deliveryHistory,
       ),
       _DashboardItem(
         title: 'Billing Checker',
-        icon: Icons.payment,
+        icon: Icons.payment_outlined,
         route: AppRouter.billingChecker,
       ),
       _DashboardItem(
         title: 'Reports',
-        icon: Icons.picture_as_pdf,
+        icon: Icons.picture_as_pdf_outlined,
         route: AppRouter.reports,
       ),
       _DashboardItem(
         title: 'Masters',
-        icon: Icons.settings,
+        icon: Icons.settings_outlined,
         route: AppRouter.mastersMenu,
       ),
     ];
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        // The AppBar is now transparent to blend with the gradient
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: const Text('Dashboard'),
         actions: [
           IconButton(
@@ -68,63 +78,97 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              greeting,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 300, // Responsive: tiles max width 300px
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1,
-                ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 4,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => Navigator.pushNamed(context, item.route),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              item.icon,
-                              size: 48,
-                              color: Theme.of(context).colorScheme.secondary,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              item.title,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+      // Extend the gradient behind the AppBar
+      extendBodyBehindAppBar: true,
+      body: AppBackground(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24.0, 100.0, 24.0, 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.terrain, size: 64, color: Colors.white),
+                      const SizedBox(height: 8),
+                      Text(
+                        'COLD STORAGE',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 2,
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  greeting,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    // --- FIX 2: Set the header text color to white ---
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // --- FIX 1: Wrap the GridView to constrain its width ---
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000.0),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 200,
+                            mainAxisSpacing: 16,
+                            crossAxisSpacing: 16,
+                            childAspectRatio: 1.1,
+                          ),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () =>
+                                Navigator.pushNamed(context, item.route),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    item.icon,
+                                    size: 40,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    item.title,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

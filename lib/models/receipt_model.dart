@@ -61,7 +61,7 @@ class Receipt {
       brandName: data['brandName'],
       inwardQuantity: data['inwardQuantity'],
       remainingQuantity: data['remainingQuantity'],
-      rate: data['rate'],
+      rate: (data['rate'] as num?)?.toDouble() ?? 0.0,
       narration: data['narration'],
       isPaid: data['isPaid'],
       status: data['status'],

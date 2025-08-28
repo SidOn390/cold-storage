@@ -7,12 +7,12 @@ import 'package:intl/intl.dart';
 import 'package:business_management_app/models/receipt_model.dart';
 import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/utils/app_notifications.dart';
+import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
 
 enum MasterType { coldStorage, product, brand }
 
 class ReceiptEntryScreen extends StatefulWidget {
   final Receipt? receipt;
-
   const ReceiptEntryScreen({super.key, this.receipt});
 
   @override
@@ -375,8 +375,9 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   void _handleTextChanged(MasterType type, String value) {
     switch (type) {
       case MasterType.coldStorage:
-        if (_selectedColdStorage != value)
+        if (_selectedColdStorage != value) {
           setState(() => _selectedColdStorage = null);
+        }
         break;
       case MasterType.product:
         if (_selectedProduct != value) setState(() => _selectedProduct = null);
@@ -390,188 +391,341 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // --- UPDATED: Make Scaffold and AppBar transparent for gradient ---
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Receipt' : 'New Receipt Entry'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: AbsorbPointer(
-                  absorbing: _isSaving,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextFormField(
-                        controller: _receiptNumberController,
-                        focusNode: _receiptNumberFocusNode,
-                        enabled: !_isEditMode,
-                        autofocus: !_isEditMode,
-                        decoration: const InputDecoration(
-                          labelText: 'Receipt Number',
+      // --- UPDATED: Wrap body in AppBackground and SafeArea ---
+      body: AppBackground(
+        child: SafeArea(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 24,
+                      horizontal: 16,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 700),
+                      child: Container(
+                        padding: const EdgeInsets.all(24.0),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(16.0),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (value) => value == null || value.isEmpty
-                            ? 'Please enter a receipt number'
-                            : null,
-                        onFieldSubmitted: (_) => FocusScope.of(
-                          context,
-                        ).requestFocus(_coldStorageFocusNode),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildAutocompleteField(
-                        masterType: MasterType.coldStorage,
-                        focusNode: _coldStorageFocusNode,
-                        controller: _coldStorageController,
-                        labelText: 'Cold Storage',
-                        options: _coldStorageOptions,
-                        nextFocusNode: _dateFocusNode,
-                        enabled: !_isEditMode,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        focusNode: _dateFocusNode,
-                        controller: _dateController,
-                        autofocus: _isEditMode,
-                        decoration: InputDecoration(
-                          labelText: 'Inward Date',
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.calendar_today),
-                            onPressed: () => _selectDate(context),
+                        child: Form(
+                          key: _formKey,
+                          child: AbsorbPointer(
+                            absorbing: _isSaving,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isWide = constraints.maxWidth > 600;
+
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    TextFormField(
+                                      controller: _receiptNumberController,
+                                      focusNode: _receiptNumberFocusNode,
+                                      enabled: !_isEditMode,
+                                      autofocus: !_isEditMode,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Receipt Number',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      validator: (value) =>
+                                          value == null || value.isEmpty
+                                          ? 'Please enter a receipt number'
+                                          : null,
+                                      onFieldSubmitted: (_) => FocusScope.of(
+                                        context,
+                                      ).requestFocus(_coldStorageFocusNode),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _buildAutocompleteField(
+                                      labelText: 'Cold Storage',
+                                      masterType: MasterType.coldStorage,
+                                      focusNode: _coldStorageFocusNode,
+                                      controller: _coldStorageController,
+                                      options: _coldStorageOptions,
+                                      nextFocusNode: _dateFocusNode,
+                                      enabled: !_isEditMode,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    TextFormField(
+                                      focusNode: _dateFocusNode,
+                                      controller: _dateController,
+                                      autofocus: _isEditMode,
+                                      decoration: InputDecoration(
+                                        labelText: 'Inward Date',
+                                        suffixIcon: IconButton(
+                                          icon: const Icon(
+                                            Icons.calendar_today_outlined,
+                                          ),
+                                          onPressed: () => _selectDate(context),
+                                        ),
+                                      ),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return 'Please enter a date';
+                                        }
+                                        try {
+                                          DateFormat(
+                                            'dd-MM-yy',
+                                          ).parseStrict(value);
+                                          return null;
+                                        } catch (e) {
+                                          return 'Invalid format (dd-MM-yy)';
+                                        }
+                                      },
+                                      onChanged: (value) {
+                                        try {
+                                          final date = DateFormat(
+                                            'dd-MM-yy',
+                                          ).parseStrict(value);
+                                          setState(() => _selectedDate = date);
+                                        } catch (e) {
+                                          /* Ignore */
+                                        }
+                                      },
+                                      onFieldSubmitted: (_) => FocusScope.of(
+                                        context,
+                                      ).requestFocus(_productFocusNode),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    if (isWide)
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: _buildAutocompleteField(
+                                              labelText: 'Product',
+                                              masterType: MasterType.product,
+                                              focusNode: _productFocusNode,
+                                              controller: _productController,
+                                              options: _productOptions,
+                                              nextFocusNode: _brandFocusNode,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: _buildAutocompleteField(
+                                              labelText: 'Brand',
+                                              masterType: MasterType.brand,
+                                              focusNode: _brandFocusNode,
+                                              controller: _brandController,
+                                              options: _brandOptions,
+                                              nextFocusNode: _quantityFocusNode,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    else ...[
+                                      _buildAutocompleteField(
+                                        labelText: 'Product',
+                                        masterType: MasterType.product,
+                                        focusNode: _productFocusNode,
+                                        controller: _productController,
+                                        options: _productOptions,
+                                        nextFocusNode: _brandFocusNode,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _buildAutocompleteField(
+                                        labelText: 'Brand',
+                                        masterType: MasterType.brand,
+                                        focusNode: _brandFocusNode,
+                                        controller: _brandController,
+                                        options: _brandOptions,
+                                        nextFocusNode: _quantityFocusNode,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 16),
+                                    if (isWide)
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller: _quantityController,
+                                              focusNode: _quantityFocusNode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Quantity',
+                                              ),
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                              ],
+                                              validator: (value) =>
+                                                  value == null || value.isEmpty
+                                                  ? 'Please enter quantity'
+                                                  : null,
+                                              onFieldSubmitted: (_) =>
+                                                  FocusScope.of(
+                                                    context,
+                                                  ).requestFocus(
+                                                    _rateFocusNode,
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller: _rateController,
+                                              focusNode: _rateFocusNode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Rate',
+                                              ),
+                                              keyboardType:
+                                                  const TextInputType.numberWithOptions(
+                                                    decimal: true,
+                                                  ),
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter.allow(
+                                                  RegExp(r'^\d+\.?\d{0,2}'),
+                                                ),
+                                              ],
+                                              validator: (value) =>
+                                                  value == null || value.isEmpty
+                                                  ? 'Please enter a rate'
+                                                  : null,
+                                              onFieldSubmitted: (_) =>
+                                                  FocusScope.of(
+                                                    context,
+                                                  ).requestFocus(
+                                                    _narrationFocusNode,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    else ...[
+                                      TextFormField(
+                                        controller: _quantityController,
+                                        focusNode: _quantityFocusNode,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Quantity',
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        validator: (value) =>
+                                            value == null || value.isEmpty
+                                            ? 'Please enter quantity'
+                                            : null,
+                                        onFieldSubmitted: (_) => FocusScope.of(
+                                          context,
+                                        ).requestFocus(_rateFocusNode),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      TextFormField(
+                                        controller: _rateController,
+                                        focusNode: _rateFocusNode,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Rate',
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d+\.?\d{0,2}'),
+                                          ),
+                                        ],
+                                        validator: (value) =>
+                                            value == null || value.isEmpty
+                                            ? 'Please enter a rate'
+                                            : null,
+                                        onFieldSubmitted: (_) => FocusScope.of(
+                                          context,
+                                        ).requestFocus(_narrationFocusNode),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 16),
+                                    TextFormField(
+                                      controller: _narrationController,
+                                      focusNode: _narrationFocusNode,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Narration (Optional)',
+                                      ),
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      maxLines: 2,
+                                      textInputAction: TextInputAction.next,
+                                      onFieldSubmitted: (_) => FocusScope.of(
+                                        context,
+                                      ).requestFocus(_saveButtonFocusNode),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    ElevatedButton(
+                                      focusNode: _saveButtonFocusNode,
+                                      onPressed: _isSaving
+                                          ? null
+                                          : _saveOrUpdateReceipt,
+                                      child: _isSaving
+                                          ? const SizedBox(
+                                              height: 24,
+                                              width: 24,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : Text(
+                                              _isEditMode
+                                                  ? 'UPDATE RECEIPT'
+                                                  : 'SAVE RECEIPT',
+                                            ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty)
-                            return 'Please enter a date';
-                          try {
-                            DateFormat('dd-MM-yy').parseStrict(value);
-                            return null;
-                          } catch (e) {
-                            return 'Invalid format (dd-MM-yy)';
-                          }
-                        },
-                        onChanged: (value) {
-                          try {
-                            final date = DateFormat(
-                              'dd-MM-yy',
-                            ).parseStrict(value);
-                            setState(() => _selectedDate = date);
-                          } catch (e) {
-                            /* Ignore */
-                          }
-                        },
-                        onFieldSubmitted: (_) => FocusScope.of(
-                          context,
-                        ).requestFocus(_productFocusNode),
                       ),
-                      const SizedBox(height: 16),
-                      _buildAutocompleteField(
-                        masterType: MasterType.product,
-                        focusNode: _productFocusNode,
-                        controller: _productController,
-                        labelText: 'Product',
-                        options: _productOptions,
-                        nextFocusNode: _brandFocusNode,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildAutocompleteField(
-                        masterType: MasterType.brand,
-                        focusNode: _brandFocusNode,
-                        controller: _brandController,
-                        labelText: 'Brand',
-                        options: _brandOptions,
-                        nextFocusNode: _quantityFocusNode,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _quantityController,
-                        focusNode: _quantityFocusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Quantity',
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (value) => value == null || value.isEmpty
-                            ? 'Please enter quantity'
-                            : null,
-                        onFieldSubmitted: (_) =>
-                            FocusScope.of(context).requestFocus(_rateFocusNode),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _rateController,
-                        focusNode: _rateFocusNode,
-                        decoration: const InputDecoration(labelText: 'Rate'),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d+\.?\d{0,2}'),
-                          ),
-                        ],
-                        validator: (value) => value == null || value.isEmpty
-                            ? 'Please enter a rate'
-                            : null,
-                        onFieldSubmitted: (_) => FocusScope.of(
-                          context,
-                        ).requestFocus(_narrationFocusNode),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _narrationController,
-                        focusNode: _narrationFocusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Narration (Optional)',
-                        ),
-                        textCapitalization: TextCapitalization.sentences,
-                        maxLines: 2,
-                        textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) => FocusScope.of(
-                          context,
-                        ).requestFocus(_saveButtonFocusNode),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        focusNode: _saveButtonFocusNode,
-                        onPressed: _isSaving ? null : _saveOrUpdateReceipt,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 16),
-                        ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _isEditMode ? 'Update Receipt' : 'Save Receipt',
-                              ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+        ),
+      ),
     );
   }
 
   Widget _buildAutocompleteField({
+    required String labelText,
     required MasterType masterType,
     required FocusNode focusNode,
     required TextEditingController controller,
-    required String labelText,
     required List<String> options,
     required FocusNode nextFocusNode,
     bool enabled = true,
@@ -617,7 +771,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
               decoration: InputDecoration(
                 labelText: labelText,
                 filled: !enabled,
-                fillColor: !enabled ? Colors.grey.shade200 : null,
+                fillColor: !enabled ? Colors.grey.withOpacity(0.1) : null,
               ),
               onChanged: (value) => _handleTextChanged(masterType, value),
               validator: (value) {
@@ -639,8 +793,8 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           ) {
             return Align(
               alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4.0,
+              child: Card(
+                margin: const EdgeInsets.only(top: 8.0),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 200),
                   child: ListView.builder(
@@ -658,7 +812,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                                 ? FontStyle.italic
                                 : FontStyle.normal,
                             color: isAddNewOption
-                                ? Theme.of(context).primaryColor
+                                ? Theme.of(context).colorScheme.primary
                                 : null,
                           ),
                         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/utils/app_notifications.dart';
+import 'package:business_management_app/widgets/app_background.dart';
 
 class ColdStorageMasterScreen extends StatefulWidget {
   const ColdStorageMasterScreen({Key? key}) : super(key: key);
@@ -39,20 +40,13 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
 
   Widget _buildShimmer() {
     return ListView.builder(
-      itemCount: 6,
-      itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: 8,
+      itemBuilder: (_, __) => Card(
+        margin: const EdgeInsets.symmetric(vertical: 4),
         child: Shimmer.fromColors(
           baseColor: Colors.grey.shade300,
           highlightColor: Colors.grey.shade100,
-          child: Container(
-            height: 56,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
+          child: const SizedBox(height: 56, width: double.infinity),
         ),
       ),
     );
@@ -71,15 +65,79 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
           builder: (context, setState) {
             final name = _textCtrl.text.trim();
             final canSubmit = name.isNotEmpty && !_isProcessing;
+
+            // --- NEW: Step 1 - Extract the save logic into a function ---
+            Future<void> submitForm() async {
+              setState(() => _isProcessing = true);
+              final name = _textCtrl.text.trim();
+              if (!_validName.hasMatch(name)) {
+                setState(() {
+                  errorText = 'Only letters, numbers, spaces, & and - allowed';
+                  _isProcessing = false;
+                });
+                return;
+              }
+              try {
+                final existing = await _firestore.getColdStorages().first;
+                final lowerNames = existing
+                    .map((e) => (e['name'] as String).toLowerCase())
+                    .toList();
+                if (id == null) {
+                  if (lowerNames.contains(name.toLowerCase())) {
+                    setState(() {
+                      errorText = 'This storage already exists';
+                      _isProcessing = false;
+                    });
+                    return;
+                  }
+                  await _firestore.addColdStorage(name);
+                } else {
+                  final original =
+                      existing.firstWhere((e) => e['id'] == id)['name']
+                          as String;
+                  if (original.toLowerCase() != name.toLowerCase() &&
+                      lowerNames.contains(name.toLowerCase())) {
+                    setState(() {
+                      errorText = 'This storage already exists';
+                      _isProcessing = false;
+                    });
+                    return;
+                  }
+                  await _firestore.updateColdStorage(id, name);
+                }
+                Navigator.of(dialogContext).pop(true);
+              } catch (e) {
+                if (mounted) {
+                  showAppNotification(
+                    context: context,
+                    message: 'Error: $e',
+                    type: NotificationType.error,
+                  );
+                }
+                Navigator.of(dialogContext).pop(false);
+              } finally {
+                if (mounted) {
+                  setState(() => _isProcessing = false);
+                }
+              }
+            }
+
             return AlertDialog(
               title: Text(
                 id == null ? 'Add Cold Storage' : 'Edit Cold Storage',
               ),
-              content: TextField(
+              content: TextFormField(
                 controller: _textCtrl,
                 autofocus: true,
+                // --- NEW: Step 2 - Add properties to the TextFormField ---
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) {
+                  if (canSubmit) {
+                    submitForm();
+                  }
+                },
                 decoration: InputDecoration(
-                  hintText: 'Name',
+                  labelText: 'Name',
                   errorText: errorText,
                   errorMaxLines: 2,
                 ),
@@ -93,68 +151,8 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: !canSubmit
-                      ? null
-                      : () async {
-                          setState(() => _isProcessing = true);
-                          final name = _textCtrl.text.trim();
-                          if (!_validName.hasMatch(name)) {
-                            setState(() {
-                              errorText =
-                                  'Only letters, numbers, spaces, & and - allowed';
-                              _isProcessing = false;
-                            });
-                            return;
-                          }
-                          try {
-                            final existing = await _firestore
-                                .getColdStorages()
-                                .first;
-                            final lowerNames = existing
-                                .map((e) => (e['name'] as String).toLowerCase())
-                                .toList();
-                            if (id == null) {
-                              if (lowerNames.contains(name.toLowerCase())) {
-                                setState(() {
-                                  errorText = 'This storage already exists';
-                                  _isProcessing = false;
-                                });
-                                return;
-                              }
-                              await _firestore.addColdStorage(name);
-                            } else {
-                              final original =
-                                  existing.firstWhere(
-                                        (e) => e['id'] == id,
-                                      )['name']
-                                      as String;
-                              if (original.toLowerCase() !=
-                                      name.toLowerCase() &&
-                                  lowerNames.contains(name.toLowerCase())) {
-                                setState(() {
-                                  errorText = 'This storage already exists';
-                                  _isProcessing = false;
-                                });
-                                return;
-                              }
-                              await _firestore.updateColdStorage(id, name);
-                            }
-                            Navigator.of(dialogContext).pop(true);
-                          } catch (e) {
-                            if (mounted) {
-                              showAppNotification(
-                                context: context,
-                                message: 'Error: $e',
-                                type: NotificationType.error,
-                              );
-                            }
-                            Navigator.of(dialogContext).pop(false);
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isProcessing = false);
-                            }
-                          }
-                        },
+                  // --- NEW: Step 3 - Update the button's onPressed ---
+                  onPressed: !canSubmit ? null : submitForm,
                   child: Text(id == null ? 'Add' : 'Save'),
                 ),
               ],
@@ -166,21 +164,18 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
   }
 
   Future<void> _confirmDelete(String id, String name) async {
-    // First, check if the item is in use.
+    // ... this function remains unchanged
     final bool isInUse = await _firestore.isColdStorageInUse(name);
-
-    if (!mounted) return; // Guard against async gaps
-
+    if (!mounted) return;
     if (isInUse) {
       showAppNotification(
         context: context,
         message: '"$name" cannot be deleted as it is in use.',
         type: NotificationType.error,
       );
-      return; // Stop the deletion process
+      return;
     }
 
-    // If not in use, proceed with confirmation dialog.
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -192,6 +187,9 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Delete'),
           ),
@@ -223,83 +221,101 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(title: const Text('Cold Storages')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Search storages…',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _firestore.getColdStorages(),
-                builder: (context, snap) {
-                  if (snap.hasError) {
-                    return Center(child: Text('Error: ${snap.error}'));
-                  }
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return _buildShimmer();
-                  }
-                  final items = (snap.data ?? [])
-                      .where(
-                        (e) => (e['name'] as String).toLowerCase().contains(
-                          _searchQuery.toLowerCase(),
-                        ),
-                      )
-                      .toList();
-                  items.sort(
-                    (a, b) => (a['name'] as String).toLowerCase().compareTo(
-                      (b['name'] as String).toLowerCase(),
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('Cold Storages'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: AppBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 0),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Search storages…',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: Theme.of(context).cardColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30.0),
+                      borderSide: BorderSide.none,
                     ),
-                  );
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _firestore.getColdStorages(),
+                    builder: (context, snap) {
+                      if (snap.hasError) {
+                        return Center(child: Text('Error: ${snap.error}'));
+                      }
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return _buildShimmer();
+                      }
+                      final items = (snap.data ?? [])
+                          .where(
+                            (e) => (e['name'] as String).toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            ),
+                          )
+                          .toList();
+                      items.sort(
+                        (a, b) => (a['name'] as String).toLowerCase().compareTo(
+                          (b['name'] as String).toLowerCase(),
+                        ),
+                      );
 
-                  if (items.isEmpty) {
-                    return const Center(child: Text('No storages yet'));
-                  }
-                  return ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final item = items[i];
-                      return ListTile(
-                        title: Text(item['name'] as String),
-                        onTap: () async {
-                          final success = await _showDialog(
-                            id: item['id'] as String,
-                            initialName: item['name'] as String,
-                          );
-                          if (success == true && mounted) {
-                            showAppNotification(
-                              context: context,
-                              message: 'Cold Storage updated successfully',
-                              type: NotificationType.info,
-                            );
-                          }
-                        },
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              tooltip: 'Edit ${item['name']}',
-                              onPressed: () async {
+                      if (items.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                size: 80,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No Storages Found',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap the + button to add your first cold storage.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) {
+                          final item = items[i];
+                          return Card(
+                            child: ListTile(
+                              title: Text(item['name'] as String),
+                              onTap: () async {
                                 final success = await _showDialog(
                                   id: item['id'] as String,
                                   initialName: item['name'] as String,
@@ -313,24 +329,47 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                                   );
                                 }
                               },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete),
-                              tooltip: 'Delete ${item['name']}',
-                              onPressed: () => _confirmDelete(
-                                item['id'] as String,
-                                item['name'] as String,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined),
+                                    tooltip: 'Edit ${item['name']}',
+                                    onPressed: () async {
+                                      final success = await _showDialog(
+                                        id: item['id'] as String,
+                                        initialName: item['name'] as String,
+                                      );
+                                      if (success == true && mounted) {
+                                        showAppNotification(
+                                          context: context,
+                                          message:
+                                              'Cold Storage updated successfully',
+                                          type: NotificationType.info,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Delete ${item['name']}',
+                                    onPressed: () => _confirmDelete(
+                                      item['id'] as String,
+                                      item['name'] as String,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(

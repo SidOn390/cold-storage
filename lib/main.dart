@@ -13,6 +13,7 @@ import 'theme.dart';
 import 'app_router.dart';
 import 'screens/auth/auth_gate.dart';
 import '../../services/master_service.dart';
+import 'package:business_management_app/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,7 +71,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Business Management App',
-      theme: AppTheme.light,
+      theme: vibrantHorizonTheme,
       initialRoute: AppRouter.authGate,
       onGenerateRoute: AppRouter.generateRoute,
     );

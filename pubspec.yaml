@@ -46,6 +46,7 @@ dependencies:
   flutter_typeahead: ^5.2.0
   dropdown_search: ^6.0.2
   another_flushbar: ^1.12.30
+  google_fonts: ^6.3.1
 
 
 
