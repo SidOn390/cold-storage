@@ -47,6 +47,8 @@ dependencies:
   dropdown_search: ^6.0.2
   another_flushbar: ^1.12.30
   google_fonts: ^6.3.1
+  printing: ^5.14.2
+  path_provider: ^2.1.5
 
 
 

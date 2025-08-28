@@ -1,5 +1,6 @@
 // lib/services/firestore_service.dart
 
+import 'package:business_management_app/models/delivery_model.dart';
 import 'package:business_management_app/models/receipt_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -163,5 +164,29 @@ class FirestoreService {
         .limit(1)
         .get();
     return querySnapshot.docs.isNotEmpty;
+  }
+  // Add these methods to your FirestoreService class
+
+  // Add a new delivery document
+  Future<void> addDelivery(Delivery delivery) {
+    return _db.collection('deliveries').add(delivery.toJson());
+  }
+
+  // Get a stream of all deliveries
+  Stream<List<Delivery>> getDeliveries() {
+    return _db.collection('deliveries').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => Delivery.fromSnapshot(doc)).toList();
+    });
+  }
+  // Add these methods to your FirestoreService class
+
+  // Update an existing delivery document
+  Future<void> updateDelivery(String id, Map<String, dynamic> data) {
+    return _db.collection('deliveries').doc(id).update(data);
+  }
+
+  // Delete a delivery document
+  Future<void> deleteDelivery(String id) {
+    return _db.collection('deliveries').doc(id).delete();
   }
 }

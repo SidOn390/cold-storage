@@ -1,5 +1,6 @@
 // File: lib/app_router.dart
 
+import 'package:business_management_app/models/delivery_model.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/auth/auth_gate.dart';
@@ -53,8 +54,9 @@ class AppRouter {
           builder: (_) => screenBuilder(const ReceiptListScreen()),
         );
       case deliveryEntry:
+        final delivery = settings.arguments as Delivery?; // Can be null
         return MaterialPageRoute(
-          builder: (_) => screenBuilder(const DeliveryEntryScreen()),
+          builder: (_) => DeliveryEntryScreen(delivery: delivery),
         );
       case deliveryHistory:
         return MaterialPageRoute(
