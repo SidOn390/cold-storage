@@ -1,7 +1,9 @@
+// lib/models/receipt_model.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Receipt {
-  final String? id; // To store the document ID from Firestore
+  final String? id;
   final String receiptNumber;
   final String coldStorageName;
   final Timestamp inwardDate;
@@ -31,7 +33,6 @@ class Receipt {
     this.createdAt,
   });
 
-  // A method to convert a Receipt instance into a map, for saving to Firestore.
   Map<String, dynamic> toJson() {
     return {
       'receiptNumber': receiptNumber,
@@ -49,23 +50,56 @@ class Receipt {
     };
   }
 
-  // A factory constructor to create a Receipt instance from a Firestore document.
   factory Receipt.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Receipt(
       id: doc.id,
-      receiptNumber: data['receiptNumber'],
-      coldStorageName: data['coldStorageName'],
-      inwardDate: data['inwardDate'],
-      productName: data['productName'],
-      brandName: data['brandName'],
-      inwardQuantity: data['inwardQuantity'],
-      remainingQuantity: data['remainingQuantity'],
+      receiptNumber: data['receiptNumber'] ?? '',
+      coldStorageName: data['coldStorageName'] ?? '',
+      inwardDate: data['inwardDate'] ?? Timestamp.now(),
+      productName: data['productName'] ?? '',
+      brandName: data['brandName'] ?? '',
+      inwardQuantity: data['inwardQuantity'] ?? 0,
+      remainingQuantity: data['remainingQuantity'] ?? 0,
       rate: (data['rate'] as num?)?.toDouble() ?? 0.0,
-      narration: data['narration'],
-      isPaid: data['isPaid'],
-      status: data['status'],
+      narration: data['narration'] ?? '',
+      isPaid: data['isPaid'] ?? false,
+      status: data['status'] ?? 'Active',
       createdAt: data['createdAt'],
+    );
+  }
+
+  // --- ADD THIS METHOD ---
+  // Creates a copy of the receipt with optional new values
+  Receipt copyWith({
+    String? id,
+    String? receiptNumber,
+    String? coldStorageName,
+    Timestamp? inwardDate,
+    String? productName,
+    String? brandName,
+    int? inwardQuantity,
+    int? remainingQuantity,
+    double? rate,
+    String? narration,
+    bool? isPaid,
+    String? status,
+    Timestamp? createdAt,
+  }) {
+    return Receipt(
+      id: id ?? this.id,
+      receiptNumber: receiptNumber ?? this.receiptNumber,
+      coldStorageName: coldStorageName ?? this.coldStorageName,
+      inwardDate: inwardDate ?? this.inwardDate,
+      productName: productName ?? this.productName,
+      brandName: brandName ?? this.brandName,
+      inwardQuantity: inwardQuantity ?? this.inwardQuantity,
+      remainingQuantity: remainingQuantity ?? this.remainingQuantity,
+      rate: rate ?? this.rate,
+      narration: narration ?? this.narration,
+      isPaid: isPaid ?? this.isPaid,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

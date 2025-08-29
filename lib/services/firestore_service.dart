@@ -189,4 +189,12 @@ class FirestoreService {
   Future<void> deleteDelivery(String id) {
     return _db.collection('deliveries').doc(id).delete();
   }
+  // Add this method to your FirestoreService class
+
+  // Toggles the 'isPaid' status of a receipt.
+  Future<void> toggleReceiptPaidStatus(String receiptId, bool currentStatus) {
+    return _db.collection('receipts').doc(receiptId).update({
+      'isPaid': !currentStatus,
+    });
+  }
 }

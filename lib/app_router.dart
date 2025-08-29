@@ -30,6 +30,7 @@ class AppRouter {
   static const coldStorageMaster = '/masters/cold-storages';
   static const productTypeMaster = '/masters/product-types';
   static const brandMaster = '/masters/brands';
+  static const String billingDetail = '/billingDetail';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     final isAuth = FirebaseAuth.instance.currentUser != null;

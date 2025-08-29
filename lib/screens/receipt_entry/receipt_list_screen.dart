@@ -450,12 +450,16 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
             const SizedBox(height: 8.0),
             Text(
               "${receipt.productName} - ${receipt.brandName}",
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4.0),
             Text(
               'Inward on: ${DateFormat('dd MMM, yyyy').format(receipt.inwardDate.toDate())}',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Divider(height: 24.0),
             Row(
