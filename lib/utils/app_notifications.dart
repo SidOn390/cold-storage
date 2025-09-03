@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:another_flushbar/flushbar.dart';
 
 // Enum to define different types of notifications
-enum NotificationType { success, error, info }
+enum NotificationType { success, error, info, warning }
 
 void showAppNotification({
   required BuildContext context,
@@ -27,6 +27,10 @@ void showAppNotification({
     case NotificationType.info:
       color = Colors.blue.shade700;
       icon = Icons.info_outline;
+      break;
+    case NotificationType.warning:
+      color = Colors.orange.shade700;
+      icon = Icons.warning_outlined;
       break;
   }
 

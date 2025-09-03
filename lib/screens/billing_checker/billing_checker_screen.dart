@@ -1,6 +1,7 @@
 // lib/screens/billing/billing_checker_screen.dart
 
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -397,7 +398,72 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     }
     if (!mounted) return;
   }
+  // In lib/screens/billing/billing_checker_screen.dart
+  // Add this new method anywhere inside the _BillingCheckerScreenState class
 
+  Widget _buildColdStorageSelector() {
+    return TextField(
+      controller: _storageCtrl, // Displays the selected value
+      readOnly: true, // Prevents the keyboard from showing up
+      onTap: _showColdStorageSheet, // Triggers the bottom sheet on tap
+      decoration: InputDecoration(
+        labelText: 'Cold Storage',
+        // The prefix icon inside the field
+        prefixIcon: const Icon(Icons.store_outlined),
+        // --- Key styling for the look you want ---
+        filled: true,
+        fillColor: Colors.white,
+        // Create a rounded border but make the border line invisible
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none, // This removes the border outline
+        ),
+        // ------------------------------------------
+      ),
+    );
+  }
+
+  void _showColdStorageSheet() {
+    final allOptions = <String>['All', ..._coldStorageNames];
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Select Cold Storage',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const Divider(height: 1),
+              // Make the list scrollable and not take up the whole screen
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: allOptions.length,
+                  itemBuilder: (context, index) {
+                    final opt = allOptions[index];
+                    return ListTile(
+                      title: Text(opt),
+                      onTap: () {
+                        _applyColdStorage(opt);
+                        Navigator.pop(context); // Close the bottom sheet
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
   // ====== UI ======
 
   // In lib/screens/billing/billing_checker_screen.dart
@@ -444,75 +510,100 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     final data = _filteredReceipts;
     final visible = data.take(_visibleCount).toList();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Autocomplete Cold Storage
-              Expanded(child: _coldStorageAutocomplete()),
-              const SizedBox(width: 12),
-              // Paid/Unpaid chips
-              Wrap(
-                spacing: 8,
-                children: ['Paid', 'Unpaid'].map((f) {
-                  final active = _tab == f;
-                  return ChoiceChip(
-                    label: Text(f),
-                    selected: active,
-                    onSelected: (_) => setState(() {
-                      _tab = f;
-                      _visibleCount = 20;
-                    }),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: _exportSummaryPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: Text('Export ${_tab} PDF'),
-            ),
-          ),
-        ),
-        const Divider(height: 0),
-        Expanded(
-          child: visible.isEmpty
-              ? _buildEmptyState('No ${_tab} receipts found.')
-              : ListView.separated(
-                  controller: _scroll,
-                  itemCount:
-                      visible.length + (visible.length < data.length ? 1 : 0),
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemBuilder: (context, index) {
-                    if (index >= visible.length) {
-                      // Load more footer indicator
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16.0),
-                          child: Text(
-                            'Loading more… (${visible.length}/${data.length})',
-                          ),
-                        ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Autocomplete Cold Storage
+                  Expanded(child: _buildColdStorageSelector()),
+
+                  // Expanded(
+                  //   child: OutlinedButton.icon(
+                  //     icon: const Icon(Icons.store_outlined),
+                  //     label: Text(_selectedColdStorage),
+                  //     onPressed: _showColdStorageSheet,
+                  //     style: OutlinedButton.styleFrom(
+                  //       padding: const EdgeInsets.symmetric(vertical: 16),
+                  //       alignment: Alignment.centerLeft,
+                  //       textStyle: const TextStyle(fontSize: 16),
+                  //     ),
+                  //   ),
+                  // ),
+                  const SizedBox(width: 12),
+                  // Paid/Unpaid chips
+                  Wrap(
+                    spacing: 8,
+                    children: ['Paid', 'Unpaid'].map((f) {
+                      final active = _tab == f;
+                      return ChoiceChip(
+                        label: Text(f),
+                        selected: active,
+                        onSelected: (_) => setState(() {
+                          _tab = f;
+                          _visibleCount = 20;
+                        }),
                       );
-                    }
-                    final r = visible[index];
-                    final remaining = _remainingFor(r);
-                    final paid = _isPaid(r);
-                    return _receiptCard(r, remaining: remaining, paid: paid);
-                  },
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _exportSummaryPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: Text('Export ${_tab} PDF'),
                 ),
+              ),
+            ),
+            const Divider(height: 0),
+            Expanded(
+              child: visible.isEmpty
+                  ? _buildEmptyState('No ${_tab} receipts found.')
+                  : ListView.separated(
+                      controller: _scroll,
+                      itemCount:
+                          visible.length +
+                          (visible.length < data.length ? 1 : 0),
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      itemBuilder: (context, index) {
+                        if (index >= visible.length) {
+                          // Load more footer indicator
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16.0,
+                              ),
+                              child: Text(
+                                'Loading more… (${visible.length}/${data.length})',
+                              ),
+                            ),
+                          );
+                        }
+                        final r = visible[index];
+                        final remaining = _remainingFor(r);
+                        final paid = _isPaid(r);
+                        return _receiptCard(
+                          r,
+                          remaining: remaining,
+                          paid: paid,
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -622,8 +713,8 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text('Product: ${r.productName}'),
-              Text('Brand: ${r.brandName}'),
+              Text('Product: ${r.productName.toUpperCase()}'),
+              Text('Brand: ${r.brandName.toUpperCase()}'),
               Text(
                 'Inward: $inwardDate   •   Inward Qty: ${_inwardQty(r)}   •   Remaining: $remaining',
               ),
@@ -659,137 +750,147 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     final remaining = _remainingFor(r);
     final paid = _isPaid(r);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Receipt Details',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _detailRow('Cold Storage', r.coldStorageName),
-                _detailRow('Receipt #', '#${r.receiptNumber}'),
-                _detailRow('Product', r.productName),
-                _detailRow('Brand', r.brandName),
-                _detailRow(
-                  'Inward Date',
-                  _dateFmt.format(_inwardTs(r).toDate()),
-                ),
-                _detailRow('Inward Qty', _inwardQty(r).toString()),
-                _detailRow(
-                  'Remaining',
-                  remaining.toString(),
-                  valueColor: remaining == 0
-                      ? Colors.green
-                      : Theme.of(context).colorScheme.error,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Outward Entries',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (deliveries.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'No deliveries recorded yet.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  )
-                else
-                  Column(
-                    children: [
-                      Row(
-                        children: const [
-                          Expanded(
-                            child: Text(
-                              'Date',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'Qty',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              'Narration',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: ListView(
+          // Added missing ConstrainedBox
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Receipt Details',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      const Divider(),
-                      ...deliveries.map(
-                        (d) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Row(
-                            children: [
+                    ),
+                    const SizedBox(height: 12),
+                    _detailRow('Cold Storage', r.coldStorageName),
+                    _detailRow('Receipt #', '${r.receiptNumber}'),
+                    _detailRow('Product', r.productName),
+                    _detailRow('Brand', r.brandName),
+                    _detailRow(
+                      'Inward Date',
+                      _dateFmt.format(_inwardTs(r).toDate()),
+                    ),
+                    _detailRow('Inward Qty', _inwardQty(r).toString()),
+                    _detailRow(
+                      'Remaining',
+                      remaining.toString(),
+                      valueColor: remaining == 0
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.error,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Outward Entries',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (deliveries.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          'No deliveries recorded yet.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
+                    else
+                      Column(
+                        children: [
+                          Row(
+                            children: const [
                               Expanded(
                                 child: Text(
-                                  _dateFmt.format(d.deliveryDate.toDate()),
+                                  'Date',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              Expanded(child: Text(d.quantity.toString())),
+                              Expanded(
+                                child: Text(
+                                  'Qty',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  d.narration.isEmpty ? '-' : d.narration,
+                                  'Narration',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
                           ),
-                        ),
+                          const Divider(),
+                          ...deliveries.map(
+                            (d) => Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 6.0,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _dateFmt.format(d.deliveryDate.toDate()),
+                                    ),
+                                  ),
+                                  Expanded(child: Text(d.quantity.toString())),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      d.narration.isEmpty ? '-' : d.narration,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _exportDetailPdf(r),
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('Export Detail PDF'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: (!paid && remaining != 0)
+                      ? null
+                      : () => _togglePaid(r),
+                  icon: Icon(
+                    paid ? Icons.undo_outlined : Icons.verified_outlined,
                   ),
+                  label: Text(paid ? 'Unmark Paid' : 'Mark as Paid'),
+                ),
               ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            FilledButton.icon(
-              onPressed: () => _exportDetailPdf(r),
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Export Detail PDF'),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: (!paid && remaining != 0)
-                  ? null
-                  : () => _togglePaid(r),
-              icon: Icon(paid ? Icons.undo_outlined : Icons.verified_outlined),
-              label: Text(paid ? 'Unmark Paid' : 'Mark as Paid'),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
@@ -800,10 +901,13 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: valueColor)),
+            child: Text(
+              value.toUpperCase(),
+              style: TextStyle(color: valueColor, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

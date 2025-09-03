@@ -703,7 +703,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "${delivery.coldStorageName} : ${delivery.receiptNumber}",
+                      "${delivery.coldStorageName.toUpperCase()} : ${delivery.receiptNumber}",
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -721,7 +721,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "${receipt.productName} - ${receipt.brandName}",
+                "${receipt.productName.toUpperCase()} - ${receipt.brandName.toUpperCase()}",
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -823,7 +823,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               Expanded(
                 flex: 4,
                 child: Text(
-                  "${delivery.coldStorageName} : ${delivery.receiptNumber}",
+                  "${delivery.coldStorageName.toUpperCase()} : ${delivery.receiptNumber}",
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -833,7 +833,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               Expanded(
                 flex: 4,
                 child: Text(
-                  "${receipt.productName} - ${receipt.brandName}",
+                  "${receipt.productName.toUpperCase()} - ${receipt.brandName.toUpperCase()}",
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,

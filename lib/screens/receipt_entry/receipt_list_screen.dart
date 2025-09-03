@@ -449,7 +449,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
             ),
             const SizedBox(height: 8.0),
             Text(
-              "${receipt.productName} - ${receipt.brandName}",
+              "${receipt.productName.toUpperCase()} - ${receipt.brandName.toUpperCase()}",
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
