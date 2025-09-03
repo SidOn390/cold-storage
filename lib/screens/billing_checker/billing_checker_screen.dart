@@ -16,7 +16,8 @@ import 'package:business_management_app/utils/app_notifications.dart';
 import 'package:business_management_app/widgets/app_background.dart';
 
 class BillingCheckerScreen extends StatefulWidget {
-  const BillingCheckerScreen({super.key});
+  const BillingCheckerScreen({super.key, this.initialDetailReceipt});
+  final Receipt? initialDetailReceipt;
 
   @override
   State<BillingCheckerScreen> createState() => _BillingCheckerScreenState();
@@ -34,6 +35,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   String _selectedColdStorage = 'All';
   int _visibleCount = 20;
   bool _isLoading = true;
+  bool get _launchedForDetail => widget.initialDetailReceipt != null;
 
   // Detail view
   Receipt? _detailReceipt;
@@ -49,6 +51,14 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   void initState() {
     super.initState();
     _fetchAll();
+    if (widget.initialDetailReceipt != null) {
+      _detailReceipt = widget.initialDetailReceipt; // ⬅️ NEW
+      _selectedColdStorage =
+          widget.initialDetailReceipt!.coldStorageName; // optional polish
+      _tab = widget.initialDetailReceipt!.isPaid
+          ? 'Paid'
+          : 'Unpaid'; // optional polish
+    }
     _scroll.addListener(_onScrollLoadMore);
   }
 
@@ -408,6 +418,12 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       onTap: _showColdStorageSheet, // Triggers the bottom sheet on tap
       decoration: InputDecoration(
         labelText: 'Cold Storage',
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 14,
+        ),
         // The prefix icon inside the field
         prefixIcon: const Icon(Icons.store_outlined),
         // --- Key styling for the look you want ---
@@ -477,15 +493,25 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       appBar: AppBar(
         title: Text(
           _detailReceipt == null
-              ? 'Billing Checker'
-              : 'Billing Checker – Detail',
+              ? 'Billing Checker' // summary view
+              : (_launchedForDetail
+                    ? 'Receipt Detail' // opened from Receipt List
+                    : 'Billing Checker – Detail'), // opened inside Billing screen
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: _detailReceipt != null
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _detailReceipt = null),
+                onPressed: () {
+                  if (_launchedForDetail) {
+                    Navigator.pop(context); // ⬅️ NEW (return to Receipt List)
+                  } else {
+                    setState(
+                      () => _detailReceipt = null,
+                    ); // old behavior (return to summary)
+                  }
+                },
               )
             : null,
       ),
@@ -604,62 +630,6 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _coldStorageAutocomplete() {
-    final allOptions = <String>['All', ..._coldStorageNames];
-
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue te) {
-        final q = te.text.trim().toLowerCase();
-        if (q.isEmpty) return allOptions;
-        return allOptions.where((o) => o.toLowerCase().contains(q));
-      },
-      initialValue: TextEditingValue(text: _storageCtrl.text),
-      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-        // keep controller in sync with state
-        controller.text = _storageCtrl.text;
-        controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: controller.text.length),
-        );
-        return TextField(
-          controller: controller,
-          focusNode: focusNode,
-          decoration: const InputDecoration(
-            labelText: 'Cold Storage',
-            hintText: 'Type to search…',
-            prefixIcon: Icon(Icons.store_outlined),
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (_) => _applyColdStorage(controller.text),
-          onEditingComplete: () => _applyColdStorage(controller.text),
-        );
-      },
-      onSelected: (String selection) => _applyColdStorage(selection),
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 300, maxWidth: 600),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final opt = options.elementAt(index);
-                  return ListTile(
-                    title: Text(opt),
-                    onTap: () => onSelected(opt),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/app_router.dart';
 import 'package:business_management_app/utils/app_notifications.dart';
 import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:business_management_app/screens/billing_checker/billing_checker_screen.dart';
 
 class ReceiptListScreen extends StatefulWidget {
   const ReceiptListScreen({super.key});
@@ -426,93 +427,104 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   Widget _buildReceiptCard(Receipt receipt) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_capitalizeFirstLetter(receipt.coldStorageName)} : ${receipt.receiptNumber}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => BillingCheckerScreen(
+                initialDetailReceipt: receipt, // ⬅️ pass the tapped receipt
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_capitalizeFirstLetter(receipt.coldStorageName)} : ${receipt.receiptNumber}',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8.0),
-                _buildStatusChip(receipt.isPaid),
-              ],
-            ),
-            const SizedBox(height: 8.0),
-            Text(
-              "${receipt.productName.toUpperCase()} - ${receipt.brandName.toUpperCase()}",
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4.0),
-            Text(
-              'Inward on: ${DateFormat('dd MMM, yyyy').format(receipt.inwardDate.toDate())}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 24.0),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildInfoColumn(
-                  'Inward Qty',
-                  receipt.inwardQuantity.toString(),
-                ),
-                _buildInfoColumn(
-                  'Rate',
-                  '₹${NumberFormat("###0").format(receipt.rate)}',
-                ),
-                _buildInfoColumn(
-                  'Remaining',
-                  receipt.remainingQuantity.toString(),
-                  isEnd: true,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: 'Edit Receipt',
-                  onPressed: () async {
-                    final result = await Navigator.pushNamed(
-                      context,
-                      AppRouter.receiptEntry,
-                      arguments: receipt,
-                    );
-
-                    if (result == true && context.mounted) {
-                      showAppNotification(
-                        context: context,
-                        message: 'Receipt updated successfully.',
-                        type: NotificationType.info,
-                      );
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.error,
+                  const SizedBox(width: 8.0),
+                  _buildStatusChip(receipt.isPaid),
+                ],
+              ),
+              const SizedBox(height: 8.0),
+              Text(
+                "${receipt.productName.toUpperCase()} - ${receipt.brandName.toUpperCase()}",
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4.0),
+              Text(
+                'Inward on: ${DateFormat('dd MMM, yyyy').format(receipt.inwardDate.toDate())}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Divider(height: 24.0),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildInfoColumn(
+                    'Inward Qty',
+                    receipt.inwardQuantity.toString(),
                   ),
-                  tooltip: 'Delete Receipt',
-                  onPressed: () => _confirmDelete(context, receipt),
-                ),
-              ],
-            ),
-          ],
+                  _buildInfoColumn(
+                    'Rate',
+                    '₹${NumberFormat("###0").format(receipt.rate)}',
+                  ),
+                  _buildInfoColumn(
+                    'Remaining',
+                    receipt.remainingQuantity.toString(),
+                    isEnd: true,
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit Receipt',
+                    onPressed: () async {
+                      final result = await Navigator.pushNamed(
+                        context,
+                        AppRouter.receiptEntry,
+                        arguments: receipt,
+                      );
+
+                      if (result == true && context.mounted) {
+                        showAppNotification(
+                          context: context,
+                          message: 'Receipt updated successfully.',
+                          type: NotificationType.info,
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    tooltip: 'Delete Receipt',
+                    onPressed: () => _confirmDelete(context, receipt),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
