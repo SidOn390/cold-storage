@@ -26,14 +26,14 @@ class AppTheme {
       ),
     ),
     checkboxTheme: CheckboxThemeData(
-      fillColor: MaterialStateProperty.all(primary),
+      fillColor: WidgetStateProperty.all(primary),
     ),
-    inputDecorationTheme: InputDecorationTheme(
-      border: const OutlineInputBorder(),
+    inputDecorationTheme: const InputDecorationTheme(
+      border: OutlineInputBorder(),
       focusedBorder: OutlineInputBorder(
         borderSide: BorderSide(color: primary),
       ),
-      errorBorder: const OutlineInputBorder(
+      errorBorder: OutlineInputBorder(
         borderSide: BorderSide(color: Colors.red),
       ),
     ),

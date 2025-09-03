@@ -114,7 +114,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                             else
                               ...filteredReceipts
                                   .map((receipt) => _buildReceiptCard(receipt))
-                                  .toList(),
+                                  ,
                           ],
                         );
                       },
@@ -128,8 +128,8 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.pushNamed(context, AppRouter.receiptEntry),
-        child: const Icon(Icons.add),
         tooltip: 'New Receipt',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -157,12 +157,12 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   }
 
   Widget _buildSummaryRow(List<Receipt> receipts) {
-    int totalReceipts = receipts.length;
-    int remainingStock = receipts.fold(
+    final int totalReceipts = receipts.length;
+    final int remainingStock = receipts.fold(
       0,
       (sum, item) => sum + item.remainingQuantity,
     );
-    int unpaidCount = receipts.where((r) => !r.isPaid).length;
+    final int unpaidCount = receipts.where((r) => !r.isPaid).length;
 
     return GridView.count(
       crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
@@ -365,7 +365,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
               visualDensity: VisualDensity.compact,
               contentPadding: EdgeInsets.zero,
             );
-          }).toList(),
+          }),
       ],
     );
   }

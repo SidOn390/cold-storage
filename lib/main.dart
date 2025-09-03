@@ -9,9 +9,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
-import 'theme.dart';
 import 'app_router.dart';
-import 'screens/auth/auth_gate.dart';
 import '../../services/master_service.dart';
 import 'package:business_management_app/theme/app_theme.dart';
 

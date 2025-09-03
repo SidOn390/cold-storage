@@ -51,7 +51,7 @@ class Receipt {
   }
 
   factory Receipt.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Receipt(
       id: doc.id,
       receiptNumber: data['receiptNumber'] ?? '',

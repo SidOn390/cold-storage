@@ -5,22 +5,22 @@ import 'package:business_management_app/app_router.dart';
 import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
 
 class MastersMenuScreen extends StatelessWidget {
-  const MastersMenuScreen({Key? key}) : super(key: key);
+  const MastersMenuScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final items = <_MasterItem>[
-      _MasterItem(
+      const _MasterItem(
         title: 'Cold Storages',
         icon: Icons.inventory_2_outlined,
         route: AppRouter.coldStorageMaster,
       ),
-      _MasterItem(
+      const _MasterItem(
         title: 'Product Types',
         icon: Icons.category_outlined,
         route: AppRouter.productTypeMaster,
       ),
-      _MasterItem(
+      const _MasterItem(
         title: 'Brands',
         icon: Icons.branding_watermark_outlined,
         route: AppRouter.brandMaster,

@@ -4,6 +4,6 @@ class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text('Dashboard')));
+    return const Scaffold(body: Center(child: Text('Dashboard')));
   }
 }

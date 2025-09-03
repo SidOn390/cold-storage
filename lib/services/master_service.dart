@@ -4,9 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class MasterService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  static List<String> _coldStorages = [];
-  static List<String> _products = [];
-  static List<String> _brands = [];
+  static final List<String> _coldStorages = [];
+  static final List<String> _products = [];
+  static final List<String> _brands = [];
 
   static List<String> get coldStorages => _coldStorages;
   static List<String> get products => _products;

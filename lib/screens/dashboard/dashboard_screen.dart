@@ -4,12 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:business_management_app/services/auth_service.dart';
 import 'package:business_management_app/app_router.dart';
-import 'package:business_management_app/theme/app_theme.dart';
 import 'package:business_management_app/widgets/app_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
 
   String _capitalize(String s) {
     if (s.isEmpty) return s;
@@ -24,37 +23,37 @@ class DashboardScreen extends StatelessWidget {
     final greeting = 'Welcome back, ${_capitalize(username)}!';
 
     final items = <_DashboardItem>[
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Receipt Entry',
         icon: Icons.receipt_long_outlined,
         route: AppRouter.receiptEntry,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Receipt List',
         icon: Icons.list_alt_outlined,
         route: AppRouter.receiptList,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Delivery Entry',
         icon: Icons.delivery_dining_outlined,
         route: AppRouter.deliveryEntry,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Delivery History',
         icon: Icons.history_outlined,
         route: AppRouter.deliveryHistory,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Billing Checker',
         icon: Icons.payment_outlined,
         route: AppRouter.billingChecker,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Reports',
         icon: Icons.picture_as_pdf_outlined,
         route: AppRouter.reports,
       ),
-      _DashboardItem(
+      const _DashboardItem(
         title: 'Masters',
         icon: Icons.settings_outlined,
         route: AppRouter.mastersMenu,
@@ -90,7 +89,7 @@ class DashboardScreen extends StatelessWidget {
                 Center(
                   child: Column(
                     children: [
-                      Icon(Icons.terrain, size: 64, color: Colors.white),
+                      const Icon(Icons.terrain, size: 64, color: Colors.white),
                       const SizedBox(height: 8),
                       Text(
                         'COLD STORAGE',

@@ -7,7 +7,7 @@ import 'package:business_management_app/utils/app_notifications.dart';
 import 'package:business_management_app/widgets/app_background.dart';
 
 class ColdStorageMasterScreen extends StatefulWidget {
-  const ColdStorageMasterScreen({Key? key}) : super(key: key);
+  const ColdStorageMasterScreen({super.key});
 
   @override
   _ColdStorageMasterScreenState createState() =>
@@ -18,7 +18,6 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
   final FirestoreService _firestore = FirestoreService();
   final TextEditingController _textCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
-  String? _editingId;
   String _searchQuery = '';
   bool _isProcessing = false;
   final RegExp _validName = RegExp(r"^[a-zA-Z0-9 &-]+$");
@@ -53,7 +52,6 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
   }
 
   Future<bool?> _showDialog({String? id, String? initialName}) async {
-    _editingId = id;
     _textCtrl.text = initialName ?? '';
     _isProcessing = false;
 

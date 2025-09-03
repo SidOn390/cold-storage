@@ -96,15 +96,6 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     return names;
   }
 
-  int _deliveredFor(Receipt r) {
-    return _allDeliveries
-        .where(
-          (d) =>
-              d.coldStorageName == r.coldStorageName &&
-              d.receiptNumber == r.receiptNumber,
-        )
-        .fold<int>(0, (sum, d) => sum + d.quantity);
-  }
 
   bool _isPaid(Receipt r) => r.isPaid;
 
@@ -245,7 +236,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'Billing Checker - ${_tab} Summary',
+                'Billing Checker - $_tab Summary',
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
@@ -315,7 +306,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     if (_filteredReceipts.isEmpty) {
       showAppNotification(
         context: context,
-        message: 'No ${_tab} receipts to export.',
+        message: 'No $_tab receipts to export.',
         type: NotificationType.error,
       );
       return;
@@ -587,14 +578,14 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                 child: FilledButton.icon(
                   onPressed: _exportSummaryPdf,
                   icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: Text('Export ${_tab} PDF'),
+                  label: Text('Export $_tab PDF'),
                 ),
               ),
             ),
             const Divider(height: 0),
             Expanded(
               child: visible.isEmpty
-                  ? _buildEmptyState('No ${_tab} receipts found.')
+                  ? _buildEmptyState('No $_tab receipts found.')
                   : ListView.separated(
                       controller: _scroll,
                       itemCount:
@@ -741,7 +732,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                     ),
                     const SizedBox(height: 12),
                     _detailRow('Cold Storage', r.coldStorageName),
-                    _detailRow('Receipt #', '${r.receiptNumber}'),
+                    _detailRow('Receipt #', r.receiptNumber),
                     _detailRow('Product', r.productName),
                     _detailRow('Brand', r.brandName),
                     _detailRow(
@@ -785,8 +776,8 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                     else
                       Column(
                         children: [
-                          Row(
-                            children: const [
+                          const Row(
+                            children: [
                               Expanded(
                                 child: Text(
                                   'Date',
@@ -871,7 +862,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           Expanded(
             child: Text(
@@ -885,12 +876,12 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   }
 
   Widget _buildEmptyState(String message) {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.receipt_long_outlined, size: 64, color: Colors.blueGrey),
             SizedBox(height: 12),
             Text('No data to show', textAlign: TextAlign.center),

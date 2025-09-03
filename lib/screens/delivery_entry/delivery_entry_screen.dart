@@ -41,7 +41,6 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
   String? _selectedColdStorage;
 
   List<Receipt> _allReceipts = [];
-  List<Delivery> _allDeliveries = [];
   List<String> _coldStorageOptions = [];
   List<String> _receiptOptions = [];
 
@@ -67,7 +66,7 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
 
   int? get _remainingStock {
     if (_selectedReceipt == null) return null;
-    int currentlyRemaining = _selectedReceipt!.remainingQuantity;
+    final int currentlyRemaining = _selectedReceipt!.remainingQuantity;
     if (_isEditMode &&
         _selectedReceipt!.receiptNumber == widget.delivery!.receiptNumber &&
         _selectedReceipt!.coldStorageName == widget.delivery!.coldStorageName) {
@@ -105,7 +104,6 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
   Future<void> _fetchInitialData() async {
     try {
       _allReceipts = await _firestoreService.getReceipts().first;
-      _allDeliveries = await _firestoreService.getDeliveries().first;
 
       final storageNames =
           _allReceipts.map((r) => r.coldStorageName.trim()).toSet().toList()

@@ -7,7 +7,7 @@ import 'package:business_management_app/utils/app_notifications.dart';
 import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
 
 class ProductMasterScreen extends StatefulWidget {
-  const ProductMasterScreen({Key? key}) : super(key: key);
+  const ProductMasterScreen({super.key});
 
   @override
   _ProductMasterScreenState createState() => _ProductMasterScreenState();
@@ -17,7 +17,6 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
   final FirestoreService _firestore = FirestoreService();
   final TextEditingController _textCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
-  String? _editingId;
   String _searchQuery = '';
   bool _isProcessing = false;
   final RegExp _validName = RegExp(r"^[a-zA-Z0-9 &-]+$");
@@ -52,7 +51,6 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
   }
 
   Future<bool?> _showDialog({String? id, String? initialName}) async {
-    _editingId = id;
     _textCtrl.text = initialName ?? '';
     _isProcessing = false;
 
