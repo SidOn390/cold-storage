@@ -282,7 +282,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
       );
       return [
         _dateFmt.format(d.deliveryDate.toDate()),
-        '${d.coldStorageName} : #${d.receiptNumber}',
+        '${d.coldStorageName} : ${d.receiptNumber}',
         '${receipt.productName} - ${receipt.brandName}',
         d.quantity.toString(),
         d.narration,
@@ -325,7 +325,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
             pw.Table.fromTextArray(
               headers: const [
                 'Date',
-                'Cold Storage : Receipt #',
+                'Cold Storage : Receipt ',
                 'Product - Brand',
                 'Qty',
                 'Narration',
@@ -488,7 +488,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               Expanded(flex: 2, child: Text('Date', style: headerStyle)),
               Expanded(
                 flex: 4,
-                child: Text('Cold Storage : Receipt #', style: headerStyle),
+                child: Text('Cold Storage : Receipt ', style: headerStyle),
               ),
               Expanded(
                 flex: 4,

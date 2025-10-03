@@ -6,8 +6,14 @@ import 'package:business_management_app/models/receipt_model.dart';
 import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/app_router.dart';
 import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:business_management_app/widgets/app_background.dart';
+
+// ✅ Reuse the Billing Checker detail screen
 import 'package:business_management_app/screens/billing_checker/billing_checker_screen.dart';
+
+// ✅ Shared widgets / utils
+import 'package:business_management_app/widgets/status_chip.dart';
+import 'package:business_management_app/utils/date_fmt.dart';
 
 class ReceiptListScreen extends StatefulWidget {
   const ReceiptListScreen({super.key});
@@ -47,7 +53,6 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 2. Make Scaffold and AppBar transparent
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -55,9 +60,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      // 3. Wrap the body content with AppBackground
       body: AppBackground(
-        // 4. Use SafeArea to avoid system UI (like status bar)
         child: SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -112,9 +115,9 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                                 ),
                               )
                             else
-                              ...filteredReceipts
-                                  .map((receipt) => _buildReceiptCard(receipt))
-                                  ,
+                              ...filteredReceipts.map(
+                                (receipt) => _buildReceiptCard(receipt),
+                              ),
                           ],
                         );
                       },
@@ -432,13 +435,13 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => BillingCheckerScreen(
-                initialDetailReceipt: receipt, // ⬅️ pass the tapped receipt
+                initialDetailReceipt: receipt, // Deep-link into Billing detail
               ),
             ),
           );
         },
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding:  EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -455,7 +458,8 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                     ),
                   ),
                   const SizedBox(width: 8.0),
-                  _buildStatusChip(receipt.isPaid),
+                  // ✅ Unified Paid/Unpaid chip
+                  StatusChip(isPaid: receipt.isPaid),
                 ],
               ),
               const SizedBox(height: 8.0),
@@ -466,8 +470,9 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4.0),
+              // ✅ Unified date format
               Text(
-                'Inward on: ${DateFormat('dd MMM, yyyy').format(receipt.inwardDate.toDate())}',
+                'Inward on: ${dfDdMmmYyyy.format(receipt.inwardDate.toDate())}',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
@@ -548,25 +553,6 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     );
   }
 
-  Widget _buildStatusChip(bool isPaid) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isPaid ? Colors.green.shade700 : colorScheme.secondary;
-    final textColor = Colors.white;
-
-    return Chip(
-      label: Text(isPaid ? 'Paid' : 'Unpaid'),
-      backgroundColor: color,
-      labelStyle: TextStyle(
-        color: textColor,
-        fontWeight: FontWeight.bold,
-        fontSize: 12.0,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      side: BorderSide.none,
-    );
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -595,7 +581,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   List<Receipt> _filterReceipts(List<Receipt> receipts) {
     if (_searchQuery.isEmpty) return receipts;
     return receipts.where((receipt) {
-      final query = _searchQuery.toLowerCase();
+      final query = _searchQuery;
       return receipt.receiptNumber.toLowerCase().contains(query) ||
           receipt.coldStorageName.toLowerCase().contains(query) ||
           receipt.productName.toLowerCase().contains(query) ||

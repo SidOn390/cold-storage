@@ -12,6 +12,7 @@ import 'firebase_options.dart';
 import 'app_router.dart';
 import '../../services/master_service.dart';
 import 'package:business_management_app/theme/app_theme.dart';
+import 'package:business_management_app/utils/hotkeys.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,6 +73,7 @@ class MyApp extends StatelessWidget {
       theme: vibrantHorizonTheme,
       initialRoute: AppRouter.authGate,
       onGenerateRoute: AppRouter.generateRoute,
+      builder: (context, child) => AppHotkeys(child: child ?? const SizedBox()),
     );
   }
 }

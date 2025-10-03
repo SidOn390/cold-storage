@@ -1,6 +1,7 @@
 // lib/screens/billing/billing_checker_screen.dart
 
 import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,12 @@ import 'package:business_management_app/models/delivery_model.dart';
 import 'package:business_management_app/services/firestore_service.dart';
 import 'package:business_management_app/utils/app_notifications.dart';
 import 'package:business_management_app/widgets/app_background.dart';
+
+// Shared building blocks
+import 'package:business_management_app/widgets/status_chip.dart';
+import 'package:business_management_app/widgets/info_kv_row.dart';
+import 'package:business_management_app/utils/date_fmt.dart';
+import 'package:business_management_app/utils/pdf_utils.dart' as pdfu;
 
 class BillingCheckerScreen extends StatefulWidget {
   const BillingCheckerScreen({super.key, this.initialDetailReceipt});
@@ -40,11 +47,10 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   // Detail view
   Receipt? _detailReceipt;
 
-  // Autocomplete controller
+  // Storage selector
   final TextEditingController _storageCtrl = TextEditingController(text: 'All');
   final FocusNode _storageFocus = FocusNode();
 
-  final _dateFmt = DateFormat('dd-MM-yy');
   final ScrollController _scroll = ScrollController();
 
   @override
@@ -52,12 +58,9 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     super.initState();
     _fetchAll();
     if (widget.initialDetailReceipt != null) {
-      _detailReceipt = widget.initialDetailReceipt; // ⬅️ NEW
-      _selectedColdStorage =
-          widget.initialDetailReceipt!.coldStorageName; // optional polish
-      _tab = widget.initialDetailReceipt!.isPaid
-          ? 'Paid'
-          : 'Unpaid'; // optional polish
+      _detailReceipt = widget.initialDetailReceipt;
+      _selectedColdStorage = widget.initialDetailReceipt!.coldStorageName;
+      _tab = widget.initialDetailReceipt!.isPaid ? 'Paid' : 'Unpaid';
     }
     _scroll.addListener(_onScrollLoadMore);
   }
@@ -96,13 +99,9 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     return names;
   }
 
-
   bool _isPaid(Receipt r) => r.isPaid;
-
   int _remainingFor(Receipt r) => r.remainingQuantity;
-
   Timestamp _inwardTs(Receipt r) => r.inwardDate;
-
   int _inwardQty(Receipt r) => r.inwardQuantity;
 
   List<Receipt> get _filteredReceipts {
@@ -214,19 +213,6 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   Future<Uint8List> _buildSummaryPdf(PdfPageFormat format) async {
     final doc = pw.Document();
 
-    final rows = _filteredReceipts.take(_visibleCount).map((r) {
-      return [
-        r.coldStorageName,
-        '#${r.receiptNumber}',
-        r.productName,
-        r.brandName,
-        _dateFmt.format(_inwardTs(r).toDate()),
-        _inwardQty(r).toString(),
-        _remainingFor(r).toString(),
-        _isPaid(r) ? 'Yes' : 'No',
-      ];
-    }).toList();
-
     doc.addPage(
       pw.MultiPage(
         pageFormat: format,
@@ -235,27 +221,21 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'Billing Checker - $_tab Summary',
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
+              pdfu.h1('Billing Checker - $_tab Summary'),
               pw.Text(DateFormat('dd-MM-yy HH:mm').format(DateTime.now())),
             ],
           ),
           pw.SizedBox(height: 8),
           pw.Text('Cold Storage: $_selectedColdStorage'),
           pw.SizedBox(height: 8),
-          if (rows.isEmpty)
+          if (_filteredReceipts.isEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 24),
               child: pw.Text('No entries.'),
             )
           else
-            pw.Table.fromTextArray(
-              headers: const [
+            pdfu.table(
+              const [
                 'Cold Storage',
                 'Receipt #',
                 'Product',
@@ -265,35 +245,21 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                 'Remaining',
                 'Paid',
               ],
-              data: rows,
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 11,
-              ),
-              cellStyle: const pw.TextStyle(fontSize: 10),
-              cellAlignments: {
-                0: pw.Alignment.centerLeft,
-                1: pw.Alignment.centerLeft,
-                2: pw.Alignment.centerLeft,
-                3: pw.Alignment.centerLeft,
-                4: pw.Alignment.centerLeft,
-                5: pw.Alignment.centerRight,
-                6: pw.Alignment.centerRight,
-                7: pw.Alignment.center,
-              },
-              columnWidths: const {
-                0: pw.FlexColumnWidth(2.0),
-                1: pw.FlexColumnWidth(1.2),
-                2: pw.FlexColumnWidth(1.6),
-                3: pw.FlexColumnWidth(1.2),
-                4: pw.FlexColumnWidth(1.2),
-                5: pw.FlexColumnWidth(1.0),
-                6: pw.FlexColumnWidth(1.0),
-                7: pw.FlexColumnWidth(0.8),
-              },
+              _filteredReceipts
+                  .take(_visibleCount)
+                  .map(
+                    (r) => [
+                      r.coldStorageName,
+                      '#${r.receiptNumber}',
+                      r.productName,
+                      r.brandName,
+                      dfDdMmYy.format(_inwardTs(r).toDate()),
+                      '${_inwardQty(r)}',
+                      '${_remainingFor(r)}',
+                      _isPaid(r) ? 'Yes' : 'No',
+                    ],
+                  )
+                  .toList(),
             ),
         ],
       ),
@@ -330,53 +296,32 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     final doc = pw.Document();
     final deliveries = _deliveriesFor(r);
 
-    final rows = deliveries.map((d) {
-      return [
-        _dateFmt.format(d.deliveryDate.toDate()),
-        d.quantity.toString(),
-        d.narration,
-      ];
-    }).toList();
-
     doc.addPage(
       pw.MultiPage(
         pageFormat: format,
         margin: const pw.EdgeInsets.all(20),
         build: (_) => [
-          pw.Text(
-            '${r.coldStorageName}  -  #${r.receiptNumber}',
-            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-          ),
+          pdfu.h1('${r.coldStorageName}  -  #${r.receiptNumber}'),
           pw.SizedBox(height: 6),
           pw.Text('Product: ${r.productName}   •   Brand: ${r.brandName}'),
           pw.Text(
-            'Inward: ${_dateFmt.format(_inwardTs(r).toDate())}   •   Inward Qty: ${_inwardQty(r)}   •   Remaining: ${_remainingFor(r)}',
+            'Inward: ${dfDdMmYy.format(_inwardTs(r).toDate())}   •   Inward Qty: ${_inwardQty(r)}   •   Remaining: ${_remainingFor(r)}',
           ),
           pw.SizedBox(height: 10),
-          if (rows.isEmpty)
+          if (deliveries.isEmpty)
             pw.Text('No deliveries recorded yet.')
           else
-            pw.Table.fromTextArray(
-              headers: const ['Date', 'Qty', 'Narration'],
-              data: rows,
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 11,
-              ),
-              cellStyle: const pw.TextStyle(fontSize: 10),
-              cellAlignments: {
-                0: pw.Alignment.centerLeft,
-                1: pw.Alignment.centerRight,
-                2: pw.Alignment.centerLeft,
-              },
-              columnWidths: const {
-                0: pw.FlexColumnWidth(1.0),
-                1: pw.FlexColumnWidth(0.6),
-                2: pw.FlexColumnWidth(2.0),
-              },
+            pdfu.table(
+              const ['Date', 'Qty', 'Narration'],
+              deliveries
+                  .map(
+                    (d) => [
+                      dfDdMmYy.format(d.deliveryDate.toDate()),
+                      '${d.quantity}',
+                      d.narration,
+                    ],
+                  )
+                  .toList(),
             ),
         ],
       ),
@@ -399,14 +344,14 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     }
     if (!mounted) return;
   }
-  // In lib/screens/billing/billing_checker_screen.dart
-  // Add this new method anywhere inside the _BillingCheckerScreenState class
+
+  // ====== Cold Storage selector (bottom sheet trigger) ======
 
   Widget _buildColdStorageSelector() {
     return TextField(
-      controller: _storageCtrl, // Displays the selected value
-      readOnly: true, // Prevents the keyboard from showing up
-      onTap: _showColdStorageSheet, // Triggers the bottom sheet on tap
+      controller: _storageCtrl,
+      readOnly: true,
+      onTap: _showColdStorageSheet,
       decoration: InputDecoration(
         labelText: 'Cold Storage',
         floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -415,17 +360,13 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
           horizontal: 12,
           vertical: 14,
         ),
-        // The prefix icon inside the field
         prefixIcon: const Icon(Icons.store_outlined),
-        // --- Key styling for the look you want ---
         filled: true,
         fillColor: Colors.white,
-        // Create a rounded border but make the border line invisible
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none, // This removes the border outline
+          borderSide: BorderSide.none,
         ),
-        // ------------------------------------------
       ),
     );
   }
@@ -448,7 +389,6 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                 ),
               ),
               const Divider(height: 1),
-              // Make the list scrollable and not take up the whole screen
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
@@ -459,7 +399,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                       title: Text(opt),
                       onTap: () {
                         _applyColdStorage(opt);
-                        Navigator.pop(context); // Close the bottom sheet
+                        Navigator.pop(context);
                       },
                     );
                   },
@@ -471,23 +411,21 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       },
     );
   }
-  // ====== UI ======
 
-  // In lib/screens/billing/billing_checker_screen.dart
+  // ====== UI ======
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // --- FIX 1: Allow the body to extend behind the AppBar ---
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
           _detailReceipt == null
-              ? 'Billing Checker' // summary view
+              ? 'Billing Checker'
               : (_launchedForDetail
-                    ? 'Receipt Detail' // opened from Receipt List
-                    : 'Billing Checker – Detail'), // opened inside Billing screen
+                    ? 'Receipt Detail'
+                    : 'Billing Checker – Detail'),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -496,11 +434,9 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {
                   if (_launchedForDetail) {
-                    Navigator.pop(context); // ⬅️ NEW (return to Receipt List)
+                    Navigator.pop(context);
                   } else {
-                    setState(
-                      () => _detailReceipt = null,
-                    ); // old behavior (return to summary)
+                    setState(() => _detailReceipt = null);
                   }
                 },
               )
@@ -508,14 +444,13 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       ),
       body: AppBackground(
         child: SafeArea(
-          // --- FIX 2: Ensure SafeArea respects the top of the screen ---
           top: true,
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _fetchAll,
                   child: _detailReceipt == null
-                      ? _buildSummaryView()
+                      ? _buildSummaryView() // now sliver-based
                       : _buildDetailView(_detailReceipt!),
                 ),
         ),
@@ -523,101 +458,116 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     );
   }
 
+  /// SUMMARY VIEW — Sliver-based, lazy list with separators + load-more footer
   Widget _buildSummaryView() {
     final data = _filteredReceipts;
     final visible = data.take(_visibleCount).toList();
 
+    // Helper line stats
+    final scope = _selectedColdStorage == 'All'
+        ? _allReceipts
+        : _allReceipts
+              .where((r) => r.coldStorageName == _selectedColdStorage)
+              .toList();
+    final scopeUnpaid = scope.where((r) => !r.isPaid).length;
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1000),
-        child: Column(
-          children: [
-            Padding(
+        child: CustomScrollView(
+          controller: _scroll,
+          slivers: [
+            // Header row: storage selector + tabs
+            SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Autocomplete Cold Storage
-                  Expanded(child: _buildColdStorageSelector()),
-
-                  // Expanded(
-                  //   child: OutlinedButton.icon(
-                  //     icon: const Icon(Icons.store_outlined),
-                  //     label: Text(_selectedColdStorage),
-                  //     onPressed: _showColdStorageSheet,
-                  //     style: OutlinedButton.styleFrom(
-                  //       padding: const EdgeInsets.symmetric(vertical: 16),
-                  //       alignment: Alignment.centerLeft,
-                  //       textStyle: const TextStyle(fontSize: 16),
-                  //     ),
-                  //   ),
-                  // ),
-                  const SizedBox(width: 12),
-                  // Paid/Unpaid chips
-                  Wrap(
-                    spacing: 8,
-                    children: ['Paid', 'Unpaid'].map((f) {
-                      final active = _tab == f;
-                      return ChoiceChip(
-                        label: Text(f),
-                        selected: active,
-                        onSelected: (_) => setState(() {
-                          _tab = f;
-                          _visibleCount = 20;
-                        }),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: _exportSummaryPdf,
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: Text('Export $_tab PDF'),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildColdStorageSelector()),
+                    const SizedBox(width: 12),
+                    Wrap(
+                      spacing: 8,
+                      children: ['Paid', 'Unpaid'].map((f) {
+                        final active = _tab == f;
+                        return ChoiceChip(
+                          label: Text(f),
+                          selected: active,
+                          onSelected: (_) => setState(() {
+                            _tab = f;
+                            _visibleCount = 20;
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const Divider(height: 0),
-            Expanded(
-              child: visible.isEmpty
-                  ? _buildEmptyState('No $_tab receipts found.')
-                  : ListView.separated(
-                      controller: _scroll,
-                      itemCount:
-                          visible.length +
-                          (visible.length < data.length ? 1 : 0),
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemBuilder: (context, index) {
-                        if (index >= visible.length) {
-                          // Load more footer indicator
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 16.0,
-                              ),
-                              child: Text(
-                                'Loading more… (${visible.length}/${data.length})',
-                              ),
-                            ),
-                          );
-                        }
-                        final r = visible[index];
-                        final remaining = _remainingFor(r);
-                        final paid = _isPaid(r);
-                        return _receiptCard(
-                          r,
-                          remaining: remaining,
-                          paid: paid,
-                        );
-                      },
+
+            // Helper line + Export button
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Showing $_selectedColdStorage · ${scope.length} receipts (${scopeUnpaid} unpaid)',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
+                    FilledButton.icon(
+                      onPressed: _exportSummaryPdf,
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      label: Text('Export $_tab PDF'),
+                    ),
+                  ],
+                ),
+              ),
             ),
+
+            // Divider
+            const SliverToBoxAdapter(child: Divider(height: 0)),
+
+            if (visible.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildEmptyState('No $_tab receipts found.'),
+              )
+            else
+              // Lazy list with on-the-fly separators
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    if (index.isOdd) {
+                      return const SizedBox(height: 8);
+                    }
+                    final i = index ~/ 2;
+                    final r = visible[i];
+                    final remaining = _remainingFor(r);
+                    final paid = _isPaid(r);
+                    return _receiptCard(r, remaining: remaining, paid: paid);
+                  }, childCount: visible.length * 2 - 1),
+                ),
+              ),
+
+            // Load-more footer (only when more are available)
+            if (visible.length < data.length)
+              SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0, top: 4),
+                    child: Text(
+                      'Loading more… (${visible.length}/${data.length})',
+                    ),
+                  ),
+                ),
+              ),
+
+            // Extra bottom padding to clear FAB
+            const SliverToBoxAdapter(child: SizedBox(height: 72)),
           ],
         ),
       ),
@@ -625,7 +575,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   }
 
   Widget _receiptCard(Receipt r, {required int remaining, required bool paid}) {
-    final inwardDate = _dateFmt.format(_inwardTs(r).toDate());
+    final inwardDate = dfDdMmYy.format(_inwardTs(r).toDate());
     final canMarkPaid = !paid && remaining == 0;
 
     return Card(
@@ -646,30 +596,32 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: paid
-                          ? Colors.green.withOpacity(0.15)
-                          : (remaining == 0
-                                ? Colors.orange.withOpacity(0.15)
-                                : Colors.blue.withOpacity(0.15)),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      paid
-                          ? 'Paid'
-                          : (remaining == 0 ? 'Unpaid' : 'In Progress'),
-                      style: TextStyle(
-                        color: paid
-                            ? Colors.green
-                            : (remaining == 0 ? Colors.orange : Colors.blue),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      StatusChip(isPaid: paid),
+                      if (!paid && remaining > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'In Progress',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -715,7 +667,6 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1000),
         child: ListView(
-          // Added missing ConstrainedBox
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             Card(
@@ -731,22 +682,22 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _detailRow('Cold Storage', r.coldStorageName),
-                    _detailRow('Receipt #', r.receiptNumber),
-                    _detailRow('Product', r.productName),
-                    _detailRow('Brand', r.brandName),
-                    _detailRow(
-                      'Inward Date',
-                      _dateFmt.format(_inwardTs(r).toDate()),
+                    InfoKvRow(label: 'Cold Storage', value: r.coldStorageName),
+                    InfoKvRow(
+                      label: 'Receipt #',
+                      value: r.receiptNumber.toString(),
                     ),
-                    _detailRow('Inward Qty', _inwardQty(r).toString()),
-                    _detailRow(
-                      'Remaining',
-                      remaining.toString(),
-                      valueColor: remaining == 0
-                          ? Colors.green
-                          : Theme.of(context).colorScheme.error,
+                    InfoKvRow(label: 'Product', value: r.productName),
+                    InfoKvRow(label: 'Brand', value: r.brandName),
+                    InfoKvRow(
+                      label: 'Inward Date',
+                      value: dfDdMmYy.format(_inwardTs(r).toDate()),
                     ),
+                    InfoKvRow(
+                      label: 'Inward Qty',
+                      value: _inwardQty(r).toString(),
+                    ),
+                    InfoKvRow(label: 'Remaining', value: remaining.toString()),
                   ],
                 ),
               ),
@@ -809,7 +760,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      _dateFmt.format(d.deliveryDate.toDate()),
+                                      dfDdMmYy.format(d.deliveryDate.toDate()),
                                     ),
                                   ),
                                   Expanded(child: Text(d.quantity.toString())),
@@ -855,36 +806,20 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     );
   }
 
-  Widget _detailRow(String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            child: Text(
-              value.toUpperCase(),
-              style: TextStyle(color: valueColor, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyState(String message) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_outlined, size: 64, color: Colors.blueGrey),
-            SizedBox(height: 12),
-            Text('No data to show', textAlign: TextAlign.center),
+            const Icon(
+              Icons.receipt_long_outlined,
+              size: 64,
+              color: Colors.blueGrey,
+            ),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
           ],
         ),
       ),
