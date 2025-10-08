@@ -1,4 +1,4 @@
-package com.example.business_management_app
+package com.example.cold_storage
 
 import io.flutter.embedding.android.FlutterActivity
 

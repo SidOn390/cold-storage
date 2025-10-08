@@ -1,6 +1,6 @@
 {
-    "name": "business_management_app",
-    "short_name": "business_management_app",
+    "name": "cold_storage",
+    "short_name": "cold_storage",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

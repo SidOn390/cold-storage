@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:business_management_app/services/auth_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/theme/app_theme.dart';
-import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:cold_storage/services/auth_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/theme/app_theme.dart';
+import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

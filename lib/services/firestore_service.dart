@@ -1,7 +1,7 @@
 // lib/services/firestore_service.dart
 
-import 'package:business_management_app/models/delivery_model.dart';
-import 'package:business_management_app/models/receipt_model.dart';
+import 'package:cold_storage/models/delivery_model.dart';
+import 'package:cold_storage/models/receipt_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirestoreService {
@@ -18,11 +18,15 @@ class FirestoreService {
             .toList(),
       );
 
-  Future<void> addColdStorage(String name) =>
-      _db.collection('cold_storages').add({'name': name.trim()});
+  Future<void> addColdStorage(String name) => _db
+      .collection('cold_storages')
+      .add({'name': name.trim(), 'name_lowercase': name.trim().toLowerCase()});
 
   Future<void> updateColdStorage(String id, String newName) =>
-      _db.collection('cold_storages').doc(id).update({'name': newName.trim()});
+      _db.collection('cold_storages').doc(id).update({
+        'name': newName.trim(),
+        'name_lowercase': newName.trim().toLowerCase(),
+      });
 
   Future<void> deleteColdStorage(String id) =>
       _db.collection('cold_storages').doc(id).delete();
@@ -33,16 +37,29 @@ class FirestoreService {
       .orderBy('name')
       .snapshots()
       .map(
-        (snap) => snap.docs
-            .map((doc) => {'id': doc.id, 'name': doc['name'] as String})
-            .toList(),
+        (snap) => snap.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'name': data['name'] as String,
+            'weight': (data['weight'] as num?)?.toDouble() ?? 0.0,
+          };
+        }).toList(),
       );
 
-  Future<void> addProduct(String name) =>
-      _db.collection('products').add({'name': name.trim()});
+  Future<void> addProduct(String name, double weight) =>
+      _db.collection('products').add({
+        'name': name.trim(),
+        'name_lowercase': name.trim().toLowerCase(),
+        'weight': weight,
+      });
 
-  Future<void> updateProduct(String id, String newName) =>
-      _db.collection('products').doc(id).update({'name': newName.trim()});
+  Future<void> updateProduct(String id, String newName, double weight) =>
+      _db.collection('products').doc(id).update({
+        'name': newName.trim(),
+        'name_lowercase': newName.trim().toLowerCase(),
+        'weight': weight,
+      });
 
   Future<void> deleteProduct(String id) =>
       _db.collection('products').doc(id).delete();
@@ -58,14 +75,44 @@ class FirestoreService {
             .toList(),
       );
 
-  Future<void> addBrand(String name) =>
-      _db.collection('brands').add({'name': name.trim()});
+  Future<void> addBrand(String name) => _db.collection('brands').add({
+    'name': name.trim(),
+    'name_lowercase': name.trim().toLowerCase(),
+  });
 
   Future<void> updateBrand(String id, String newName) =>
-      _db.collection('brands').doc(id).update({'name': newName.trim()});
+      _db.collection('brands').doc(id).update({
+        'name': newName.trim(),
+        'name_lowercase': newName.trim().toLowerCase(),
+      });
 
   Future<void> deleteBrand(String id) =>
       _db.collection('brands').doc(id).delete();
+
+  // ─── Companies ─────────────────────────────────────────────────────────
+  Stream<List<Map<String, dynamic>>> getCompanies() => _db
+      .collection('companies')
+      .orderBy('name')
+      .snapshots()
+      .map(
+        (snap) => snap.docs
+            .map((doc) => {'id': doc.id, 'name': doc['name'] as String})
+            .toList(),
+      );
+
+  Future<void> addCompany(String name) => _db.collection('companies').add({
+    'name': name.trim(),
+    'name_lowercase': name.trim().toLowerCase(),
+  });
+
+  Future<void> updateCompany(String id, String newName) =>
+      _db.collection('companies').doc(id).update({
+        'name': newName.trim(),
+        'name_lowercase': newName.trim().toLowerCase(),
+      });
+
+  Future<void> deleteCompany(String id) =>
+      _db.collection('companies').doc(id).delete();
 
   // ─── Receipts ───────────────────────────────────────────────────────────
 
@@ -161,6 +208,16 @@ class FirestoreService {
     final querySnapshot = await _db
         .collection('receipts')
         .where('coldStorageName', isEqualTo: coldStorageName)
+        .limit(1)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
+  }
+
+  /// Checks if a given company name is used in any receipt.
+  Future<bool> isCompanyInUse(String companyName) async {
+    final querySnapshot = await _db
+        .collection('receipts')
+        .where('companyName', isEqualTo: companyName)
         .limit(1)
         .get();
     return querySnapshot.docs.isNotEmpty;

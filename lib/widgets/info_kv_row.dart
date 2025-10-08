@@ -21,7 +21,7 @@ class InfoKvRow extends StatelessWidget {
           width: labelWidth,
           child: Text('$label: ', style: text.labelMedium),
         ),
-        Flexible(child: Text(value, style: text.bodyMedium)),
+        Flexible(child: Text(value.toUpperCase(), style: text.bodyMedium)),
       ],
     );
   }

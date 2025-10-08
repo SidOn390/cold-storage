@@ -10,17 +10,17 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import 'package:business_management_app/models/receipt_model.dart';
-import 'package:business_management_app/models/delivery_model.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart';
+import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/models/delivery_model.dart';
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart';
 
 // Shared building blocks
-import 'package:business_management_app/widgets/status_chip.dart';
-import 'package:business_management_app/widgets/info_kv_row.dart';
-import 'package:business_management_app/utils/date_fmt.dart';
-import 'package:business_management_app/utils/pdf_utils.dart' as pdfu;
+import 'package:cold_storage/widgets/status_chip.dart';
+import 'package:cold_storage/widgets/info_kv_row.dart';
+import 'package:cold_storage/utils/date_fmt.dart';
+import 'package:cold_storage/utils/pdf_utils.dart' as pdfu;
 
 class BillingCheckerScreen extends StatefulWidget {
   const BillingCheckerScreen({super.key, this.initialDetailReceipt});
@@ -682,6 +682,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    InfoKvRow(label: 'Company', value: r.companyName),
                     InfoKvRow(label: 'Cold Storage', value: r.coldStorageName),
                     InfoKvRow(
                       label: 'Receipt #',

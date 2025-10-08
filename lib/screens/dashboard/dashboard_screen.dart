@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:business_management_app/services/auth_service.dart';
-import 'package:business_management_app/app_router.dart';
-import 'package:business_management_app/widgets/app_background.dart';
+import 'package:cold_storage/services/auth_service.dart';
+import 'package:cold_storage/app_router.dart';
+import 'package:cold_storage/widgets/app_background.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatelessWidget {

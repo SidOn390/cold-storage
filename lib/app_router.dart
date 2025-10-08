@@ -1,6 +1,6 @@
 // File: lib/app_router.dart
 
-import 'package:business_management_app/models/delivery_model.dart';
+import 'package:cold_storage/models/delivery_model.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/auth/auth_gate.dart';
@@ -15,7 +15,8 @@ import 'screens/masters/masters_menu_screen.dart';
 import 'screens/masters/cold_storage_master_screen.dart';
 import 'screens/masters/product_master_screen.dart';
 import 'screens/masters/brand_master_screen.dart';
-import 'package:business_management_app/models/receipt_model.dart';
+import 'screens/masters/company_master_screen.dart';
+import 'package:cold_storage/models/receipt_model.dart';
 
 class AppRouter {
   static const authGate = '/';
@@ -30,6 +31,7 @@ class AppRouter {
   static const coldStorageMaster = '/masters/cold-storages';
   static const productTypeMaster = '/masters/product-types';
   static const brandMaster = '/masters/brands';
+  static const companyMaster = '/masters/companies';
   static const String billingDetail = '/billingDetail';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -86,6 +88,10 @@ class AppRouter {
       case brandMaster:
         return MaterialPageRoute(
           builder: (_) => screenBuilder(const BrandMasterScreen()),
+        );
+      case companyMaster:
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const CompanyMasterScreen()),
         );
       default:
         return MaterialPageRoute(builder: (_) => const AuthGate());

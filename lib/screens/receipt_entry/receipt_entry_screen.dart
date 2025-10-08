@@ -4,12 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:business_management_app/models/receipt_model.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
-enum MasterType { coldStorage, product, brand }
+enum MasterType { coldStorage, product, brand, company }
 
 class ReceiptEntryScreen extends StatefulWidget {
   final Receipt? receipt;
@@ -27,6 +27,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   final _coldStorageController = TextEditingController();
   final _productController = TextEditingController();
   final _brandController = TextEditingController();
+  final _companyController = TextEditingController();
   final _quantityController = TextEditingController();
   final _rateController = TextEditingController();
   final _narrationController = TextEditingController();
@@ -37,6 +38,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   final _dateFocusNode = FocusNode();
   final _productFocusNode = FocusNode();
   final _brandFocusNode = FocusNode();
+  final _companyFocusNode = FocusNode();
   final _quantityFocusNode = FocusNode();
   final _rateFocusNode = FocusNode();
   final _narrationFocusNode = FocusNode();
@@ -46,10 +48,12 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   String? _selectedColdStorage;
   String? _selectedProduct;
   String? _selectedBrand;
+  String? _selectedCompany;
 
   List<String> _coldStorageOptions = [];
   List<String> _productOptions = [];
   List<String> _brandOptions = [];
+  List<String> _companyOptions = [];
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -74,6 +78,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _coldStorageController.text = r.coldStorageName;
     _productController.text = r.productName;
     _brandController.text = r.brandName;
+    _companyController.text = r.companyName;
     _quantityController.text = r.inwardQuantity.toString();
     _rateController.text = r.rate.toString();
     _narrationController.text = r.narration;
@@ -83,6 +88,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _selectedColdStorage = r.coldStorageName;
     _selectedProduct = r.productName;
     _selectedBrand = r.brandName;
+    _selectedCompany = r.companyName;
   }
 
   @override
@@ -91,6 +97,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _coldStorageController.dispose();
     _productController.dispose();
     _brandController.dispose();
+    _companyController.dispose();
     _quantityController.dispose();
     _rateController.dispose();
     _narrationController.dispose();
@@ -101,6 +108,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _dateFocusNode.dispose();
     _productFocusNode.dispose();
     _brandFocusNode.dispose();
+    _companyFocusNode.dispose();
     _quantityFocusNode.dispose();
     _rateFocusNode.dispose();
     _narrationFocusNode.dispose();
@@ -113,6 +121,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       final storagesList = await _firestoreService.getColdStorages().first;
       final productsList = await _firestoreService.getProducts().first;
       final brandsList = await _firestoreService.getBrands().first;
+      final companiesList = await _firestoreService.getCompanies().first;
 
       if (mounted) {
         setState(() {
@@ -124,6 +133,9 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           _brandOptions =
               brandsList.map((map) => map['name'] as String).toList()
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _companyOptions =
+              companiesList.map((map) => map['name'] as String).toList()
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           _isLoading = false;
         });
@@ -184,6 +196,13 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
       _showValidationError('Please select a valid Brand.', _brandFocusNode);
       return;
     }
+    if (_selectedCompany == null) {
+      _showValidationError(
+        'Please select a valid Company.',
+        _companyFocusNode,
+      );
+      return;
+    }
 
     final navigator = Navigator.of(context);
     setState(() => _isSaving = true);
@@ -209,6 +228,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         final updatedData = {
           'productName': _selectedProduct!,
           'brandName': _selectedBrand!,
+          'companyName': _selectedCompany!,
           'inwardQuantity': newInwardQuantity,
           'remainingQuantity': newRemainingQuantity,
           'rate': double.parse(_rateController.text),
@@ -242,6 +262,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           inwardDate: Timestamp.fromDate(_selectedDate),
           productName: _selectedProduct!,
           brandName: _selectedBrand!,
+          companyName: _selectedCompany!,
           inwardQuantity: quantity,
           remainingQuantity: quantity,
           rate: double.parse(_rateController.text),
@@ -260,6 +281,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         _coldStorageController.clear();
         _productController.clear();
         _brandController.clear();
+        _companyController.clear();
         _quantityController.clear();
         _rateController.clear();
         _narrationController.clear();
@@ -270,6 +292,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           _selectedColdStorage = null;
           _selectedProduct = null;
           _selectedBrand = null;
+          _selectedCompany = null;
           _isSaving = false;
         });
         FocusScope.of(context).requestFocus(_receiptNumberFocusNode);
@@ -302,75 +325,252 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         case MasterType.brand:
           _selectedBrand = selection;
           _brandController.text = selection;
+          FocusScope.of(context).requestFocus(_companyFocusNode);
+          break;
+        case MasterType.company:
+          _selectedCompany = selection;
+          _companyController.text = selection;
           FocusScope.of(context).requestFocus(_quantityFocusNode);
           break;
       }
     });
   }
 
-  Future<void> _handleAddNewItem(MasterType type, String newName) async {
-    setState(() => _isSaving = true);
-    String collectionName;
-    List<String> optionsList;
-    String label;
-    switch (type) {
-      case MasterType.coldStorage:
-        collectionName = 'cold_storages';
-        optionsList = _coldStorageOptions;
-        label = 'Cold Storage';
-        break;
-      case MasterType.product:
-        collectionName = 'products';
-        optionsList = _productOptions;
-        label = 'Product';
-        break;
-      case MasterType.brand:
-        collectionName = 'brands';
-        optionsList = _brandOptions;
-        label = 'Brand';
-        break;
-    }
-    if (optionsList.any((o) => o.toLowerCase() == newName.toLowerCase())) {
-      final existingOption = optionsList.firstWhere(
-        (o) => o.toLowerCase() == newName.toLowerCase(),
-      );
-      showAppNotification(
-        context: context,
-        message: '"$existingOption" already exists and has been selected.',
-        type: NotificationType.info,
-      );
-      _handleSelection(type, existingOption);
-      if (mounted) setState(() => _isSaving = false);
-      return;
-    }
-    try {
-      await _firestoreService.addMasterItem(collectionName, newName);
-      if (mounted) {
-        setState(() {
-          optionsList.add(newName);
-          optionsList.sort(
-            (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
-          );
-        });
-      }
-      _handleSelection(type, newName);
-      showAppNotification(
-        context: context,
-        message: '$label "$newName" added successfully.',
-        type: NotificationType.success,
-      );
-    } catch (e) {
-      if (mounted) {
+  // Replace the existing _handleAddNewItem method in receipt_entry_screen.dart with this:
+
+Future<void> _handleAddNewItem(MasterType type, String newName) async {
+  // For products, show a dialog to collect weight
+  if (type == MasterType.product) {
+    final result = await _showProductDialog(newName);
+    if (result != null) {
+      final name = result['name'] as String;
+      final weight = result['weight'] as double;
+      
+      setState(() => _isSaving = true);
+      
+      // Check if product already exists
+      if (_productOptions.any((o) => o.toLowerCase() == name.toLowerCase())) {
+        final existingOption = _productOptions.firstWhere(
+          (o) => o.toLowerCase() == name.toLowerCase(),
+        );
         showAppNotification(
           context: context,
-          message: 'Error adding new $label: $e',
-          type: NotificationType.error,
+          message: '"$existingOption" already exists and has been selected.',
+          type: NotificationType.info,
         );
+        _handleSelection(type, existingOption);
+        if (mounted) setState(() => _isSaving = false);
+        return;
       }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      
+      try {
+        await _firestoreService.addProduct(name, weight);
+        if (mounted) {
+          setState(() {
+            _productOptions.add(name);
+            _productOptions.sort(
+              (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+            );
+          });
+        }
+        _handleSelection(type, name);
+        showAppNotification(
+          context: context,
+          message: 'Product "$name" added successfully.',
+          type: NotificationType.success,
+        );
+      } catch (e) {
+        if (mounted) {
+          showAppNotification(
+            context: context,
+            message: 'Error adding new Product: $e',
+            type: NotificationType.error,
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
     }
+    return;
   }
+
+  // For other types (coldStorage, brand, company), use existing logic
+  setState(() => _isSaving = true);
+  String collectionName;
+  List<String> optionsList;
+  String label;
+  
+  switch (type) {
+    case MasterType.coldStorage:
+      collectionName = 'cold_storages';
+      optionsList = _coldStorageOptions;
+      label = 'Cold Storage';
+      break;
+    case MasterType.brand:
+      collectionName = 'brands';
+      optionsList = _brandOptions;
+      label = 'Brand';
+      break;
+    case MasterType.company:
+      collectionName = 'companies';
+      optionsList = _companyOptions;
+      label = 'Company';
+      break;
+    case MasterType.product:
+      // Already handled above
+      return;
+  }
+  
+  if (optionsList.any((o) => o.toLowerCase() == newName.toLowerCase())) {
+    final existingOption = optionsList.firstWhere(
+      (o) => o.toLowerCase() == newName.toLowerCase(),
+    );
+    showAppNotification(
+      context: context,
+      message: '"$existingOption" already exists and has been selected.',
+      type: NotificationType.info,
+    );
+    _handleSelection(type, existingOption);
+    if (mounted) setState(() => _isSaving = false);
+    return;
+  }
+  
+  try {
+    await _firestoreService.addMasterItem(collectionName, newName);
+    if (mounted) {
+      setState(() {
+        optionsList.add(newName);
+        optionsList.sort(
+          (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+        );
+      });
+    }
+    _handleSelection(type, newName);
+    showAppNotification(
+      context: context,
+      message: '$label "$newName" added successfully.',
+      type: NotificationType.success,
+    );
+  } catch (e) {
+    if (mounted) {
+      showAppNotification(
+        context: context,
+        message: 'Error adding new $label: $e',
+        type: NotificationType.error,
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isSaving = false);
+  }
+}
+
+// Add this new method to show the product dialog
+Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
+  final nameController = TextEditingController(text: initialName);
+  final weightController = TextEditingController();
+  String? nameError;
+  String? weightError;
+  final validName = RegExp(r"^[a-zA-Z0-9 &-]+$");
+
+  return await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final name = nameController.text.trim();
+          final weightText = weightController.text.trim();
+          final weightValue = double.tryParse(weightText);
+          final canSubmit = name.isNotEmpty && 
+                           weightValue != null && 
+                           weightValue > 0;
+
+          return AlertDialog(
+            title: const Text('Add Product'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: 'Product Name',
+                    errorText: nameError,
+                    errorMaxLines: 2,
+                  ),
+                  onChanged: (_) => setState(() => nameError = null),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: weightController,
+                  textInputAction: TextInputAction.done,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Weight',
+                    hintText: 'e.g. 50',
+                    suffixText: 'kg',
+                    errorText: weightError,
+                  ),
+                  onChanged: (_) => setState(() => weightError = null),
+                  onFieldSubmitted: (_) {
+                    if (canSubmit) {
+                      // Validate and submit
+                      final name = nameController.text.trim();
+                      final weight = double.tryParse(weightController.text.trim());
+                      
+                      if (!validName.hasMatch(name)) {
+                        setState(() => nameError = 'Only letters, numbers, spaces, & and - allowed');
+                        return;
+                      }
+                      if (weight == null || weight <= 0) {
+                        setState(() => weightError = 'Enter a valid weight greater than zero');
+                        return;
+                      }
+                      
+                      Navigator.of(dialogContext).pop({
+                        'name': name,
+                        'weight': weight,
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: !canSubmit ? null : () {
+                  final name = nameController.text.trim();
+                  final weight = double.tryParse(weightController.text.trim());
+                  
+                  if (!validName.hasMatch(name)) {
+                    setState(() => nameError = 'Only letters, numbers, spaces, & and - allowed');
+                    return;
+                  }
+                  if (weight == null || weight <= 0) {
+                    setState(() => weightError = 'Enter a valid weight greater than zero');
+                    return;
+                  }
+                  
+                  Navigator.of(dialogContext).pop({
+                    'name': name,
+                    'weight': weight,
+                  });
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
   void _handleTextChanged(MasterType type, String value) {
     switch (type) {
@@ -384,6 +584,11 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
         break;
       case MasterType.brand:
         if (_selectedBrand != value) setState(() => _selectedBrand = null);
+        break;
+      case MasterType.company:
+        if (_selectedCompany != value) {
+          setState(() => _selectedCompany = null);
+        }
         break;
     }
   }
@@ -539,6 +744,17 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                                               focusNode: _brandFocusNode,
                                               controller: _brandController,
                                               options: _brandOptions,
+                                              nextFocusNode: _companyFocusNode,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: _buildAutocompleteField(
+                                              labelText: 'Company',
+                                              masterType: MasterType.company,
+                                              focusNode: _companyFocusNode,
+                                              controller: _companyController,
+                                              options: _companyOptions,
                                               nextFocusNode: _quantityFocusNode,
                                             ),
                                           ),
@@ -560,6 +776,15 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
                                         focusNode: _brandFocusNode,
                                         controller: _brandController,
                                         options: _brandOptions,
+                                        nextFocusNode: _companyFocusNode,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _buildAutocompleteField(
+                                        labelText: 'Company',
+                                        masterType: MasterType.company,
+                                        focusNode: _companyFocusNode,
+                                        controller: _companyController,
+                                        options: _companyOptions,
                                         nextFocusNode: _quantityFocusNode,
                                       ),
                                     ],

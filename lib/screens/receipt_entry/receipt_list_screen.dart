@@ -2,18 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:business_management_app/models/receipt_model.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/app_router.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart';
+import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/app_router.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart';
 
 // ✅ Reuse the Billing Checker detail screen
-import 'package:business_management_app/screens/billing_checker/billing_checker_screen.dart';
+import 'package:cold_storage/screens/billing_checker/billing_checker_screen.dart';
 
 // ✅ Shared widgets / utils
-import 'package:business_management_app/widgets/status_chip.dart';
-import 'package:business_management_app/utils/date_fmt.dart';
+import 'package:cold_storage/widgets/status_chip.dart';
+import 'package:cold_storage/utils/date_fmt.dart';
 
 class ReceiptListScreen extends StatefulWidget {
   const ReceiptListScreen({super.key});

@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
 class BrandMasterScreen extends StatefulWidget {
   const BrandMasterScreen({super.key});

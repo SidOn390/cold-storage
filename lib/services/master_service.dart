@@ -7,10 +7,12 @@ class MasterService {
   static final List<String> _coldStorages = [];
   static final List<String> _products = [];
   static final List<String> _brands = [];
+  static final List<String> _companies = [];
 
   static List<String> get coldStorages => _coldStorages;
   static List<String> get products => _products;
   static List<String> get brands => _brands;
+  static List<String> get companies => _companies;
 
   // Load all master data from Firestore
   static Future<void> loadAllMasters() async {
@@ -18,6 +20,7 @@ class MasterService {
       _loadCollection('cold_storages', _coldStorages),
       _loadCollection('products', _products),
       _loadCollection('brands', _brands),
+      _loadCollection('companies', _companies),
     ]);
   }
 
@@ -39,9 +42,15 @@ class MasterService {
     }
   }
 
-  static Future<void> addProduct(String value) async {
-    if (!_products.contains(value)) {
-      await _addToFirestore('products', value);
+  static Future<void> addProduct(String value, double weight) async {
+    final lower = value.toLowerCase();
+    final hasExisting = _products.any((item) => item.toLowerCase() == lower);
+    if (!hasExisting) {
+      await _firestore.collection('products').add({
+        'name': value,
+        'name_lowercase': lower,
+        'weight': weight,
+      });
       _products.add(value);
     }
   }
@@ -53,10 +62,22 @@ class MasterService {
     }
   }
 
+  static Future<void> addCompany(String value) async {
+    final lower = value.toLowerCase();
+    final hasExisting = _companies.any((item) => item.toLowerCase() == lower);
+    if (!hasExisting) {
+      await _addToFirestore('companies', value);
+      _companies.add(value);
+    }
+  }
+
   static Future<void> _addToFirestore(
     String collectionName,
     String value,
   ) async {
-    await _firestore.collection(collectionName).add({'name': value});
+    await _firestore.collection(collectionName).add({
+      'name': value,
+      'name_lowercase': value.toLowerCase(),
+    });
   }
 }

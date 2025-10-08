@@ -9,6 +9,7 @@ class Receipt {
   final Timestamp inwardDate;
   final String productName;
   final String brandName;
+  final String companyName;
   final int inwardQuantity;
   final int remainingQuantity;
   final double rate;
@@ -24,6 +25,7 @@ class Receipt {
     required this.inwardDate,
     required this.productName,
     required this.brandName,
+    required this.companyName,
     required this.inwardQuantity,
     required this.remainingQuantity,
     required this.rate,
@@ -40,6 +42,7 @@ class Receipt {
       'inwardDate': inwardDate,
       'productName': productName,
       'brandName': brandName,
+      'companyName': companyName,
       'inwardQuantity': inwardQuantity,
       'remainingQuantity': remainingQuantity,
       'rate': rate,
@@ -59,6 +62,7 @@ class Receipt {
       inwardDate: data['inwardDate'] ?? Timestamp.now(),
       productName: data['productName'] ?? '',
       brandName: data['brandName'] ?? '',
+      companyName: data['companyName'] ?? '',
       inwardQuantity: data['inwardQuantity'] ?? 0,
       remainingQuantity: data['remainingQuantity'] ?? 0,
       rate: (data['rate'] as num?)?.toDouble() ?? 0.0,
@@ -78,6 +82,7 @@ class Receipt {
     Timestamp? inwardDate,
     String? productName,
     String? brandName,
+    String? companyName,
     int? inwardQuantity,
     int? remainingQuantity,
     double? rate,
@@ -93,6 +98,7 @@ class Receipt {
       inwardDate: inwardDate ?? this.inwardDate,
       productName: productName ?? this.productName,
       brandName: brandName ?? this.brandName,
+      companyName: companyName ?? this.companyName,
       inwardQuantity: inwardQuantity ?? this.inwardQuantity,
       remainingQuantity: remainingQuantity ?? this.remainingQuantity,
       rate: rate ?? this.rate,

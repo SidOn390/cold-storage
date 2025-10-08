@@ -11,8 +11,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'app_router.dart';
 import '../../services/master_service.dart';
-import 'package:business_management_app/theme/app_theme.dart';
-import 'package:business_management_app/utils/hotkeys.dart';
+import 'package:cold_storage/theme/app_theme.dart';
+import 'package:cold_storage/utils/hotkeys.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,7 +69,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Business Management App',
+      title: 'Cold Storage Management App',
       theme: vibrantHorizonTheme,
       initialRoute: AppRouter.authGate,
       onGenerateRoute: AppRouter.generateRoute,

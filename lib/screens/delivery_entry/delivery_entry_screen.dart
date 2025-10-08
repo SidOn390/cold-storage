@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:business_management_app/models/delivery_model.dart';
-import 'package:business_management_app/models/receipt_model.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart';
+import 'package:cold_storage/models/delivery_model.dart';
+import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart';
 
 class DeliveryEntryScreen extends StatefulWidget {
   final Delivery? delivery;

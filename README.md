@@ -1,4 +1,4 @@
-# business_management_app
+# cold_storage
 
 A new Flutter project.
 

@@ -1,8 +1,8 @@
 // File: lib/screens/masters/masters_menu_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:business_management_app/app_router.dart';
-import 'package:business_management_app/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:cold_storage/app_router.dart';
+import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
 class MastersMenuScreen extends StatelessWidget {
   const MastersMenuScreen({super.key});
@@ -24,6 +24,11 @@ class MastersMenuScreen extends StatelessWidget {
         title: 'Brands',
         icon: Icons.branding_watermark_outlined,
         route: AppRouter.brandMaster,
+      ),
+      const _MasterItem(
+        title: 'Companies',
+        icon: Icons.apartment_outlined,
+        route: AppRouter.companyMaster,
       ),
     ];
 

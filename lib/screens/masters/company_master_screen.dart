@@ -1,23 +1,23 @@
-// File: lib/screens/masters/product_type_master_screen.dart
+// File: lib/screens/masters/company_master_screen.dart
 
-import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:cold_storage/services/firestore_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
-import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
+import 'package:cold_storage/widgets/app_background.dart';
+import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 
-class ProductMasterScreen extends StatefulWidget {
-  const ProductMasterScreen({super.key});
+class CompanyMasterScreen extends StatefulWidget {
+  const CompanyMasterScreen({super.key});
 
   @override
-  _ProductMasterScreenState createState() => _ProductMasterScreenState();
+  State<CompanyMasterScreen> createState() => _CompanyMasterScreenState();
 }
 
-class _ProductMasterScreenState extends State<ProductMasterScreen> {
+class _CompanyMasterScreenState extends State<CompanyMasterScreen> {
   final FirestoreService _firestore = FirestoreService();
   final TextEditingController _textCtrl = TextEditingController();
-  final TextEditingController _weightCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
+
   String _searchQuery = '';
   bool _isProcessing = false;
   final RegExp _validName = RegExp(r"^[a-zA-Z0-9 &-]+$");
@@ -33,7 +33,6 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
   @override
   void dispose() {
     _textCtrl.dispose();
-    _weightCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -52,39 +51,22 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
     );
   }
 
-  Future<bool?> _showDialog({
-    String? id,
-    String? initialName,
-    double? initialWeight,
-  }) async {
+  Future<bool?> _showDialog({String? id, String? initialName}) async {
     _textCtrl.text = initialName ?? '';
-    _weightCtrl.text = initialWeight != null && initialWeight > 0
-        ? '$initialWeight'
-        : '';
     _isProcessing = false;
 
-    return await showDialog<bool>(
+    return showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         String? errorText;
-        String? weightErrorText;
         return StatefulBuilder(
           builder: (context, setState) {
             final name = _textCtrl.text.trim();
-            final weightText = _weightCtrl.text.trim();
-            final weightValue = double.tryParse(weightText);
-            final canSubmit =
-                name.isNotEmpty &&
-                weightValue != null &&
-                weightValue > 0 &&
-                !_isProcessing;
+            final canSubmit = name.isNotEmpty && !_isProcessing;
 
-            // --- NEW: Extracted save logic ---
             Future<void> submitForm() async {
               setState(() => _isProcessing = true);
               final name = _textCtrl.text.trim();
-              final weightText = _weightCtrl.text.trim();
-              final parsedWeight = double.tryParse(weightText);
               if (!_validName.hasMatch(name)) {
                 setState(() {
                   errorText = 'Only letters, numbers, spaces, & and - allowed';
@@ -92,42 +74,43 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                 });
                 return;
               }
-              if (parsedWeight == null || parsedWeight <= 0) {
-                setState(() {
-                  weightErrorText = 'Enter a valid weight greater than zero';
-                  _isProcessing = false;
-                });
-                return;
-              }
+
               try {
-                final existing = await _firestore.getProducts().first;
+                final existing = await _firestore.getCompanies().first;
                 final lowerNames = existing
                     .map((e) => (e['name'] as String).toLowerCase())
                     .toList();
+
                 if (id == null) {
                   if (lowerNames.contains(name.toLowerCase())) {
                     setState(() {
-                      errorText = 'This Product already exists';
+                      errorText = 'This company already exists';
                       _isProcessing = false;
                     });
                     return;
                   }
-                  await _firestore.addProduct(name, parsedWeight);
+                  await _firestore.addCompany(name);
                 } else {
                   final original =
                       existing.firstWhere((e) => e['id'] == id)['name']
                           as String;
-                  if (original.toLowerCase() != name.toLowerCase() &&
-                      lowerNames.contains(name.toLowerCase())) {
+                  final lowerName = name.toLowerCase();
+                  final originalLower = original.toLowerCase();
+                  final hasConflict =
+                      originalLower != lowerName &&
+                      lowerNames.contains(lowerName);
+                  if (hasConflict) {
                     setState(() {
-                      errorText = 'This Product already exists';
+                      errorText = 'This company already exists';
                       _isProcessing = false;
                     });
                     return;
                   }
-                  await _firestore.updateProduct(id, name, parsedWeight);
+                  await _firestore.updateCompany(id, name);
                 }
-                Navigator.of(dialogContext).pop(true);
+                if (mounted) {
+                  Navigator.of(dialogContext).pop(true);
+                }
               } catch (e) {
                 if (mounted) {
                   showAppNotification(
@@ -145,42 +128,22 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
             }
 
             return AlertDialog(
-              title: Text(id == null ? 'Add Product' : 'Edit Product'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: _textCtrl,
-                    autofocus: true,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      errorText: errorText,
-                      errorMaxLines: 2,
-                    ),
-                    onChanged: (_) => setState(() => errorText = null),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _weightCtrl,
-                    textInputAction: TextInputAction.done,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onFieldSubmitted: (_) {
-                      if (canSubmit) {
-                        submitForm();
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Weight',
-                      hintText: 'e.g. 50',
-                      suffixText: 'kg',
-                      errorText: weightErrorText,
-                    ),
-                    onChanged: (_) => setState(() => weightErrorText = null),
-                  ),
-                ],
+              title: Text(id == null ? 'Add Company' : 'Edit Company'),
+              content: TextFormField(
+                controller: _textCtrl,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) {
+                  if (canSubmit) {
+                    submitForm();
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Company Name',
+                  errorText: errorText,
+                  errorMaxLines: 2,
+                ),
+                onChanged: (_) => setState(() => errorText = null),
               ),
               actions: [
                 TextButton(
@@ -200,7 +163,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
   }
 
   Future<void> _confirmDelete(String id, String name) async {
-    final bool isInUse = await _firestore.isProductInUse(name);
+    final bool isInUse = await _firestore.isCompanyInUse(name);
     if (!mounted) return;
     if (isInUse) {
       showAppNotification(
@@ -214,8 +177,8 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Product'),
-        content: const Text('Are you sure you want to delete this item?'),
+        title: const Text('Delete Company'),
+        content: const Text('Are you sure you want to delete this company?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -231,13 +194,14 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
         ],
       ),
     );
+
     if (confirm == true) {
       try {
-        await _firestore.deleteProduct(id);
+        await _firestore.deleteCompany(id);
         if (mounted) {
           showAppNotification(
             context: context,
-            message: 'Product deleted successfully',
+            message: 'Company deleted successfully',
             type: NotificationType.error,
           );
         }
@@ -245,7 +209,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
         if (mounted) {
           showAppNotification(
             context: context,
-            message: 'Error deleting product: $e',
+            message: 'Error deleting company: $e',
             type: NotificationType.error,
           );
         }
@@ -256,17 +220,14 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 2. Make Scaffold and AppBar transparent
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Products'),
+        title: const Text('Companies'),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      // 3. Wrap the body content with AppBackground
       body: AppBackground(
-        // 4. Use SafeArea to avoid system UI (like status bar)
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 0),
@@ -275,7 +236,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                 TextField(
                   controller: _searchCtrl,
                   decoration: InputDecoration(
-                    hintText: 'Search Product…',
+                    hintText: 'Search companies…',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -297,7 +258,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                 const SizedBox(height: 16),
                 Expanded(
                   child: StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _firestore.getProducts(),
+                    stream: _firestore.getCompanies(),
                     builder: (context, snap) {
                       if (snap.hasError) {
                         return Center(child: Text('Error: ${snap.error}'));
@@ -305,6 +266,7 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                       if (snap.connectionState == ConnectionState.waiting) {
                         return _buildShimmer();
                       }
+
                       final items = (snap.data ?? [])
                           .where(
                             (e) => (e['name'] as String).toLowerCase().contains(
@@ -312,31 +274,33 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                             ),
                           )
                           .toList();
+
                       items.sort(
                         (a, b) => (a['name'] as String).toLowerCase().compareTo(
                           (b['name'] as String).toLowerCase(),
                         ),
                       );
+
                       if (items.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.category_outlined,
+                                Icons.apartment_outlined,
                                 size: 80,
                                 color: Colors.grey.shade400,
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'No Products Found',
+                                'No Companies Found',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.headlineSmall,
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Tap the + button to add your first product.',
+                                'Tap the + button to add your first company.',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
@@ -344,31 +308,24 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                           ),
                         );
                       }
+
                       return ListView.builder(
                         padding: const EdgeInsets.only(bottom: 80),
                         itemCount: items.length,
                         itemBuilder: (context, i) {
                           final item = items[i];
-                          final weight =
-                              (item['weight'] as num?)?.toDouble() ?? 0.0;
                           return Card(
                             child: ListTile(
                               title: Text(item['name'] as String),
-                              subtitle: Text(
-                                weight > 0
-                                    ? 'Weight: ${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 2)} kg'
-                                    : 'Weight: —',
-                              ),
                               onTap: () async {
                                 final success = await _showDialog(
                                   id: item['id'] as String,
                                   initialName: item['name'] as String,
-                                  initialWeight: weight,
                                 );
                                 if (success == true && mounted) {
                                   showAppNotification(
                                     context: context,
-                                    message: 'Product updated successfully',
+                                    message: 'Company updated successfully',
                                     type: NotificationType.info,
                                   );
                                 }
@@ -383,13 +340,12 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                                       final success = await _showDialog(
                                         id: item['id'] as String,
                                         initialName: item['name'] as String,
-                                        initialWeight: weight,
                                       );
                                       if (success == true && mounted) {
                                         showAppNotification(
                                           context: context,
                                           message:
-                                              'Product updated successfully',
+                                              'Company updated successfully',
                                           type: NotificationType.info,
                                         );
                                       }
@@ -423,12 +379,12 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
           if (success == true && mounted) {
             showAppNotification(
               context: context,
-              message: 'Product added successfully',
+              message: 'Company added successfully',
               type: NotificationType.success,
             );
           }
         },
-        tooltip: 'Add Product',
+        tooltip: 'Add Company',
         child: const Icon(Icons.add),
       ),
     );

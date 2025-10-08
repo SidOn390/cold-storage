@@ -3,12 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:business_management_app/models/delivery_model.dart';
-import 'package:business_management_app/models/receipt_model.dart';
-import 'package:business_management_app/services/firestore_service.dart';
-import 'package:business_management_app/utils/app_notifications.dart';
-import 'package:business_management_app/widgets/app_background.dart';
-import 'package:business_management_app/app_router.dart';
+import 'package:cold_storage/models/delivery_model.dart';
+import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/widgets/app_background.dart';
+import 'package:cold_storage/app_router.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
@@ -274,6 +274,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
           inwardDate: Timestamp.now(),
           productName: '-',
           brandName: '-',
+          companyName: '-',
           inwardQuantity: 0,
           remainingQuantity: 0,
           rate: 0,
@@ -660,6 +661,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
         inwardDate: Timestamp.now(),
         productName: '-',
         brandName: '-',
+        companyName: '-',
         inwardQuantity: 0,
         remainingQuantity: 0,
         rate: 0,
