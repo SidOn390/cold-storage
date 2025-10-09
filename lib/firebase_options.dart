@@ -46,7 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '858492692446',
     projectId: 'cold-storage-inventory',
     authDomain: 'cold-storage-inventory.firebaseapp.com',
-    storageBucket: 'cold-storage-inventory.appspot.com',
+    storageBucket: 'cold-storage-inventory.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
     appId: '1:858492692446:android:3999f10066614fbec79f4f',
     messagingSenderId: '858492692446',
     projectId: 'cold-storage-inventory',
-    storageBucket: 'cold-storage-inventory.appspot.com',
+    storageBucket: 'cold-storage-inventory.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -62,8 +62,7 @@ class DefaultFirebaseOptions {
     appId: '1:858492692446:ios:004a275be29ac93dc79f4f',
     messagingSenderId: '858492692446',
     projectId: 'cold-storage-inventory',
-    storageBucket: 'cold-storage-inventory.appspot.com',
-
+    storageBucket: 'cold-storage-inventory.firebasestorage.app',
     iosBundleId: 'com.example.businessManagementApp',
   );
 
@@ -72,8 +71,7 @@ class DefaultFirebaseOptions {
     appId: '1:858492692446:ios:004a275be29ac93dc79f4f',
     messagingSenderId: '858492692446',
     projectId: 'cold-storage-inventory',
-    storageBucket: 'cold-storage-inventory.appspot.com',
-
+    storageBucket: 'cold-storage-inventory.firebasestorage.app',
     iosBundleId: 'com.example.businessManagementApp',
   );
 
@@ -83,6 +81,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '858492692446',
     projectId: 'cold-storage-inventory',
     authDomain: 'cold-storage-inventory.firebaseapp.com',
-    storageBucket: 'cold-storage-inventory.appspot.com',
+    storageBucket: 'cold-storage-inventory.firebasestorage.app',
   );
+
 }

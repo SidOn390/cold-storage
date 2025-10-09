@@ -1,0 +1,15 @@
+# ~/.codex/config.toml
+default_profile = "yolo"
+
+[profiles.yolo]
+sandbox = "workspace-write"
+ask_for_approval = "never"
+# Optional: auto-approve only file edits but still ask before shell commands:
+# ask_for_approval = "untrusted"   # previews/runs outside-trust get prompts
+
+# (Optional) mark recurring safe terminal commands you never want to approve
+safeCommands = [
+  ["git", "status"],
+  ["npm", "test", "python"],
+  ["flutter", "pub", "get"]
+]
