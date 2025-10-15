@@ -13,6 +13,7 @@ import 'app_router.dart';
 import '../../services/master_service.dart';
 import 'package:cold_storage/theme/app_theme.dart';
 import 'package:cold_storage/utils/hotkeys.dart';
+import 'widgets/session_timeout_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,7 +74,9 @@ class MyApp extends StatelessWidget {
       theme: vibrantHorizonTheme,
       initialRoute: AppRouter.authGate,
       onGenerateRoute: AppRouter.generateRoute,
-      builder: (context, child) => AppHotkeys(child: child ?? const SizedBox()),
+      builder: (context, child) => SessionTimeoutListener(
+        child: AppHotkeys(child: child ?? const SizedBox()),
+      ),
     );
   }
 }

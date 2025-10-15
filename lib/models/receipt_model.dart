@@ -72,6 +72,7 @@ class Receipt {
       createdAt: data['createdAt'],
     );
   }
+  
 
   // --- ADD THIS METHOD ---
   // Creates a copy of the receipt with optional new values

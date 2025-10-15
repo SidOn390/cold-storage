@@ -5,11 +5,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cold_storage/services/auth_service.dart';
 import 'package:cold_storage/app_router.dart';
 import 'package:cold_storage/widgets/app_background.dart';
+import 'package:cold_storage/services/backup_service.dart';
+import 'package:cold_storage/services/master_service.dart';
+import 'package:cold_storage/utils/app_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
   String _capitalize(String s) {
     if (s.isEmpty) return s;
     return s[0].toUpperCase() + s.substring(1);
@@ -63,7 +71,6 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        // The AppBar is now transparent to blend with the gradient
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Dashboard'),
@@ -77,7 +84,6 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      // Extend the gradient behind the AppBar
       extendBodyBehindAppBar: true,
       body: AppBackground(
         child: SingleChildScrollView(
@@ -108,12 +114,10 @@ class DashboardScreen extends StatelessWidget {
                   greeting,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    // --- FIX 2: Set the header text color to white ---
                     color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 24),
-                // --- FIX 1: Wrap the GridView to constrain its width ---
                 Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1000.0),
@@ -165,9 +169,137 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 32),
+                Text(
+                  'Data utilities',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _exportBackup,
+                      icon: const Icon(Icons.download_outlined),
+                      label: const Text('Backup'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _importBackup,
+                      icon: const Icon(Icons.upload_outlined),
+                      label: const Text('Restore'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportBackup() async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    _showLoadingDialog(navigator, 'Exporting backup...');
+
+    final service = BackupService();
+    final result = await service.exportToLocal();
+
+    if (navigator.mounted) {
+      navigator.pop();
+    }
+
+    if (!mounted) return;
+
+    if (result.success) {
+      final location = result.locationMessage ?? 'backup file';
+      showAppNotification(
+        context: context,
+        message: 'Backup saved to $location',
+        type: NotificationType.success,
+      );
+    } else {
+      final message = result.error ?? 'Backup failed.';
+      final lowered = message.toLowerCase();
+      final type = lowered.contains('cancelled')
+          ? NotificationType.info
+          : NotificationType.error;
+      showAppNotification(context: context, message: message, type: type);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final confirmed = await showDialog<bool>(
+      context: navigator.context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Import backup'),
+        content: const Text(
+          'Importing a backup will overwrite existing documents with the same '
+          'IDs. This action cannot be undone. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    _showLoadingDialog(navigator, 'Importing backup...');
+
+    final service = BackupService();
+    final result = await service.importFromLocal();
+
+    if (navigator.mounted) {
+      navigator.pop();
+    }
+
+    if (!mounted) return;
+
+    if (result.success) {
+      await MasterService.loadAllMasters();
+      if (!mounted) return;
+      final source = result.source ?? 'backup file';
+      showAppNotification(
+        context: context,
+        message: 'Data restored from $source',
+        type: NotificationType.success,
+      );
+    } else {
+      final message = result.error ?? 'Restore failed.';
+      final lowered = message.toLowerCase();
+      final type = lowered.contains('selected')
+          ? NotificationType.info
+          : NotificationType.error;
+      showAppNotification(context: context, message: message, type: type);
+    }
+  }
+
+  void _showLoadingDialog(NavigatorState navigator, String message) {
+    showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(child: Text(message)),
+          ],
         ),
       ),
     );
