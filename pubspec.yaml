@@ -55,14 +55,16 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   local_auth: ^2.1.7
   flutter_secure_storage: ^9.2.2
-
-
+  encrypt: ^5.0.3
+  crypto: ^3.0.5
 
   pdf: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
   rename: ^3.0.1
+  mockito: ^5.4.4
+  build_runner: ^2.4.13
 
 
   # The "flutter_lints" package below contains a set of recommended lints to

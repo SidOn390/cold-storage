@@ -125,7 +125,8 @@ class _ProductMasterScreenState extends State<ProductMasterScreen> {
                     });
                     return;
                   }
-                  await _firestore.updateProduct(id, name, parsedWeight);
+                  // CASCADE UPDATE: Pass oldName to update all references
+                  await _firestore.updateProduct(id, name, parsedWeight, oldName: original);
                 }
                 Navigator.of(dialogContext).pop(true);
               } catch (e) {

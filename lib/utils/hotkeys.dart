@@ -1,25 +1,13 @@
-import 'dart:async'; // NEW: Required for StreamSubscription
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// NEW: Import dart:html for web-specific code, with a conditional import
-// to avoid errors on mobile.
+// Import universal_html for web-specific code
 import 'package:universal_html/html.dart' as html;
 
-// Screen registers the callbacks it wants to handle.
+/// Callbacks that screens can register to handle global keyboard shortcuts.
 class HotkeyHandlers {
-  // ... (No changes in this class)
-  final VoidCallback? onSearch;
-  final VoidCallback? onExport;
-  final VoidCallback? onNewReceipt;
-  final VoidCallback? onTogglePaid;
-  final VoidCallback? onToggleUnpaid;
-  final VoidCallback? onOpenStorage;
-  final VoidCallback? onRefresh;
-  final VoidCallback? onBack;
-  final VoidCallback? onHelp;
-
   const HotkeyHandlers({
     this.onSearch,
     this.onExport,
@@ -31,11 +19,20 @@ class HotkeyHandlers {
     this.onBack,
     this.onHelp,
   });
+
+  final VoidCallback? onSearch;
+  final VoidCallback? onExport;
+  final VoidCallback? onNewReceipt;
+  final VoidCallback? onTogglePaid;
+  final VoidCallback? onToggleUnpaid;
+  final VoidCallback? onOpenStorage;
+  final VoidCallback? onRefresh;
+  final VoidCallback? onBack;
+  final VoidCallback? onHelp;
 }
 
-// Inherited widget that exposes the current screen's handlers.
+/// Inherited widget that exposes the current screen's hotkey handlers.
 class HotkeyScope extends InheritedWidget {
-  // ... (No changes in this class)
   const HotkeyScope({super.key, required this.handlers, required super.child});
 
   final HotkeyHandlers handlers;
@@ -50,7 +47,7 @@ class HotkeyScope extends InheritedWidget {
       handlers != oldWidget.handlers;
 }
 
-// Intent classes
+// Intent classes for Flutter's Actions/Shortcuts system
 class SearchIntent extends Intent {
   const SearchIntent();
 }
@@ -63,7 +60,6 @@ class NewReceiptIntent extends Intent {
   const NewReceiptIntent();
 }
 
-// ... (All other intent classes are the same)
 class TogglePaidIntent extends Intent {
   const TogglePaidIntent();
 }
@@ -88,10 +84,14 @@ class HelpIntent extends Intent {
   const HelpIntent();
 }
 
-/// Global installer.
-// --- START: CONVERT TO STATEFULWIDGET ---
+/// Global hotkey manager that wraps the entire app.
+///
+/// On web, this uses DOM event listeners to intercept browser shortcuts
+/// before they trigger default browser behavior (like Ctrl+F, Ctrl+P, etc).
+/// On mobile/desktop, it uses Flutter's standard Shortcuts/Actions system.
 class AppHotkeys extends StatefulWidget {
   const AppHotkeys({super.key, required this.child});
+
   final Widget child;
 
   @override
@@ -99,13 +99,12 @@ class AppHotkeys extends StatefulWidget {
 }
 
 class _AppHotkeysState extends State<AppHotkeys> {
-  // NEW: Subscription to manage the web event listener
   StreamSubscription<html.KeyboardEvent>? _webKeyListener;
 
   @override
   void initState() {
     super.initState();
-    // NEW: Add the low-level web listener only if we are on the web.
+    // Set up web-specific keyboard event interception
     if (kIsWeb) {
       _webKeyListener = html.window.onKeyDown.listen(_handleWebKeyDown);
     }
@@ -113,26 +112,58 @@ class _AppHotkeysState extends State<AppHotkeys> {
 
   @override
   void dispose() {
-    // NEW: Clean up the listener to prevent memory leaks.
     _webKeyListener?.cancel();
     super.dispose();
   }
 
-  /// NEW: This method handles the raw key event from the browser.
+  /// Handles raw keyboard events on web to prevent browser defaults.
+  ///
+  /// This method intercepts common browser shortcuts and prevents their
+  /// default behavior, then triggers the corresponding app action.
   void _handleWebKeyDown(html.KeyboardEvent event) {
     final isMac = html.window.navigator.platform?.startsWith('Mac') ?? false;
-    final isCtrlF = event.key == 'f' && (isMac ? event.metaKey : event.ctrlKey);
+    final ctrlOrMeta = isMac ? event.metaKey : event.ctrlKey;
+    final key = event.key?.toLowerCase();
 
-    if (isCtrlF) {
-      // This is the most important part:
-      // It stops the browser's default "Find" dialog from appearing.
+    // Map of shortcuts that should be intercepted on web
+    final shouldPrevent = <String, VoidCallback?>{
+      'f': () => _handlersFromFocus(context)?.onSearch?.call(), // Ctrl+F: Find
+      'p': () => _handlersFromFocus(context)?.onExport?.call(), // Ctrl+P: Print
+      'n': () => _handlersFromFocus(context)?.onNewReceipt?.call(), // Ctrl+N: New
+      'k': () => _handlersFromFocus(context)?.onOpenStorage?.call(), // Ctrl+K
+      's': null, // Ctrl+S: Save (prevent default, let Flutter handle)
+    };
+
+    // Check if this is a shortcut we want to intercept
+    if (ctrlOrMeta && key != null && shouldPrevent.containsKey(key)) {
       event.preventDefault();
+      event.stopPropagation();
 
-      // Now, trigger our Flutter app's search logic.
-      _handlersFromFocus(context)?.onSearch?.call();
+      // Invoke the handler if available
+      final handler = shouldPrevent[key];
+      handler?.call();
+
+      debugPrint('🔧 Intercepted browser shortcut: Ctrl+${key.toUpperCase()}');
+    }
+
+    // Handle Ctrl+1 and Ctrl+2 (these use 'digit' event codes)
+    if (ctrlOrMeta) {
+      if (key == '1') {
+        event.preventDefault();
+        _handlersFromFocus(context)?.onTogglePaid?.call();
+      } else if (key == '2') {
+        event.preventDefault();
+        _handlersFromFocus(context)?.onToggleUnpaid?.call();
+      }
+    }
+
+    // Prevent Ctrl+R (browser refresh) on web
+    if (ctrlOrMeta && key == 'r') {
+      event.preventDefault();
+      _handlersFromFocus(context)?.onRefresh?.call();
+      debugPrint('🔧 Prevented browser refresh, triggered app refresh');
     }
   }
-  // --- END: STATEFULWIDGET LIFECYCLE AND WEB HANDLER ---
 
   bool get _isMacLike {
     final p = defaultTargetPlatform;
@@ -149,62 +180,106 @@ class _AppHotkeysState extends State<AppHotkeys> {
     final ctrl = !_isMacLike;
     final meta = _isMacLike;
 
-    // We still keep the Flutter shortcut system for everything else.
-    // We remove the Ctrl+F binding from here ONLY on the web,
-    // as it's now handled by our manual listener.
+    // Define keyboard shortcuts
+    // On web, we exclude shortcuts that are handled by the DOM listener
     final shortcuts = <ShortcutActivator, Intent>{
-      // MODIFIED: Conditionally exclude the SearchIntent on web
+      // Search (Ctrl+F) - on web, handled by DOM listener
       if (!kIsWeb)
         SingleActivator(LogicalKeyboardKey.keyF, control: ctrl, meta: meta):
             const SearchIntent(),
 
-      SingleActivator(LogicalKeyboardKey.keyP, control: ctrl, meta: meta):
-          const ExportIntent(),
-      SingleActivator(LogicalKeyboardKey.keyN, control: ctrl, meta: meta):
-          const NewReceiptIntent(),
-      SingleActivator(LogicalKeyboardKey.digit1, control: ctrl, meta: meta):
-          const TogglePaidIntent(),
-      SingleActivator(LogicalKeyboardKey.digit2, control: ctrl, meta: meta):
-          const ToggleUnpaidIntent(),
-      SingleActivator(LogicalKeyboardKey.keyK, control: ctrl, meta: meta):
-          const OpenStorageIntent(),
+      // Export/Print (Ctrl+P) - on web, handled by DOM listener
+      if (!kIsWeb)
+        SingleActivator(LogicalKeyboardKey.keyP, control: ctrl, meta: meta):
+            const ExportIntent(),
+
+      // New receipt (Ctrl+N) - on web, handled by DOM listener
+      if (!kIsWeb)
+        SingleActivator(LogicalKeyboardKey.keyN, control: ctrl, meta: meta):
+            const NewReceiptIntent(),
+
+      // Toggle paid (Ctrl+1) - on web, handled by DOM listener
+      if (!kIsWeb)
+        SingleActivator(LogicalKeyboardKey.digit1, control: ctrl, meta: meta):
+            const TogglePaidIntent(),
+
+      // Toggle unpaid (Ctrl+2) - on web, handled by DOM listener
+      if (!kIsWeb)
+        SingleActivator(LogicalKeyboardKey.digit2, control: ctrl, meta: meta):
+            const ToggleUnpaidIntent(),
+
+      // Open storage (Ctrl+K) - on web, handled by DOM listener
+      if (!kIsWeb)
+        SingleActivator(LogicalKeyboardKey.keyK, control: ctrl, meta: meta):
+            const OpenStorageIntent(),
+
+      // Refresh (Ctrl+R) - on web, handled by DOM listener
       if (!kIsWeb)
         const SingleActivator(LogicalKeyboardKey.keyR, control: true):
             const RefreshIntent(),
+
+      // Back (Escape) - works on all platforms
       const SingleActivator(LogicalKeyboardKey.escape): const BackIntent(),
+
+      // Help (F1) - works on all platforms
       const SingleActivator(LogicalKeyboardKey.f1): const HelpIntent(),
     };
 
+    // Define actions for each intent
     final actions = <Type, Action<Intent>>{
       SearchIntent: CallbackAction<SearchIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onSearch?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onSearch?.call();
+          return null;
+        },
       ),
-      // ... (all other actions are the same)
       ExportIntent: CallbackAction<ExportIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onExport?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onExport?.call();
+          return null;
+        },
       ),
       NewReceiptIntent: CallbackAction<NewReceiptIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onNewReceipt?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onNewReceipt?.call();
+          return null;
+        },
       ),
       TogglePaidIntent: CallbackAction<TogglePaidIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onTogglePaid?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onTogglePaid?.call();
+          return null;
+        },
       ),
       ToggleUnpaidIntent: CallbackAction<ToggleUnpaidIntent>(
-        onInvoke: (intent) =>
-            _handlersFromFocus(context)?.onToggleUnpaid?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onToggleUnpaid?.call();
+          return null;
+        },
       ),
       OpenStorageIntent: CallbackAction<OpenStorageIntent>(
-        onInvoke: (intent) =>
-            _handlersFromFocus(context)?.onOpenStorage?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onOpenStorage?.call();
+          return null;
+        },
       ),
       RefreshIntent: CallbackAction<RefreshIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onRefresh?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onRefresh?.call();
+          return null;
+        },
       ),
       BackIntent: CallbackAction<BackIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onBack?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onBack?.call();
+          return null;
+        },
       ),
       HelpIntent: CallbackAction<HelpIntent>(
-        onInvoke: (intent) => _handlersFromFocus(context)?.onHelp?.call(),
+        onInvoke: (intent) {
+          _handlersFromFocus(context)?.onHelp?.call();
+          return null;
+        },
       ),
     };
 
@@ -215,7 +290,7 @@ class _AppHotkeysState extends State<AppHotkeys> {
         shortcuts: shortcuts,
         child: Actions(
           actions: actions,
-          child: widget.child, // Use widget.child in a StatefulWidget
+          child: widget.child,
         ),
       ),
     );

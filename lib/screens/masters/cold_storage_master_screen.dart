@@ -101,7 +101,8 @@ class _ColdStorageMasterScreenState extends State<ColdStorageMasterScreen> {
                     });
                     return;
                   }
-                  await _firestore.updateColdStorage(id, name);
+                  // CASCADE UPDATE: Pass oldName to update all references
+                  await _firestore.updateColdStorage(id, name, oldName: original);
                 }
                 Navigator.of(dialogContext).pop(true);
               } catch (e) {

@@ -242,19 +242,31 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
       );
       return;
     }
-    if (_remainingStock != null && quantity > _remainingStock!) {
-      showAppNotification(
-        context: context,
-        message: 'Quantity exceeds available stock.',
-        type: NotificationType.error,
-      );
-      return;
-    }
 
     setState(() => _isSaving = true);
     final navigator = Navigator.of(context);
 
     try {
+      // COMPREHENSIVE VALIDATION using DeliveryValidationService
+      final validation = await _firestoreService.validateDelivery(
+        receipt: _selectedReceipt!,
+        attemptedQuantity: quantity,
+        excludeDeliveryId: _isEditMode ? widget.delivery?.id : null,
+      );
+
+      if (!validation.isValid) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          showAppNotification(
+            context: context,
+            message: validation.errorMessage!,
+            type: NotificationType.error,
+          );
+        }
+        return;
+      }
+
+      // Validation passed, proceed with save
       if (_isEditMode) {
         final deliveryToUpdate = widget.delivery!;
         final updatedData = {
@@ -267,16 +279,16 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
           updatedData,
         );
 
-        final difference = quantity - deliveryToUpdate.quantity;
-        final newRemaining = _selectedReceipt!.remainingQuantity - difference;
-        await _firestoreService.updateReceipt(_selectedReceipt!.id!, {
-          'remainingQuantity': newRemaining,
-        });
+        // Sync receipt remaining quantity from actual deliveries
+        await _firestoreService.syncReceiptRemainingQuantity(
+          receiptId: _selectedReceipt!.id!,
+          receiptNumber: _selectedReceipt!.receiptNumber,
+          coldStorageName: _selectedReceipt!.coldStorageName,
+          inwardQuantity: _selectedReceipt!.inwardQuantity,
+        );
 
-        // --- FIX 1: REMOVED NOTIFICATION, JUST POP WITH RESULT ---
         navigator.pop(true);
       } else {
-        // ... create logic remains the same
         final newDelivery = Delivery(
           coldStorageName: _selectedColdStorage!,
           receiptNumber: _receiptController.text.trim(),
@@ -286,10 +298,13 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
         );
         await _firestoreService.addDelivery(newDelivery);
 
-        final newRemaining = (_remainingStock ?? 0) - quantity;
-        await _firestoreService.updateReceipt(_selectedReceipt!.id!, {
-          'remainingQuantity': newRemaining,
-        });
+        // Sync receipt remaining quantity from actual deliveries
+        await _firestoreService.syncReceiptRemainingQuantity(
+          receiptId: _selectedReceipt!.id!,
+          receiptNumber: _selectedReceipt!.receiptNumber,
+          coldStorageName: _selectedReceipt!.coldStorageName,
+          inwardQuantity: _selectedReceipt!.inwardQuantity,
+        );
 
         showAppNotification(
           context: context,

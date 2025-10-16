@@ -30,6 +30,24 @@ class MastersMenuScreen extends StatelessWidget {
         icon: Icons.apartment_outlined,
         route: AppRouter.companyMaster,
       ),
+      const _MasterItem(
+        title: 'Data Maintenance',
+        icon: Icons.settings_suggest_outlined,
+        route: AppRouter.dataMaintenance,
+        isAdmin: true,
+      ),
+      const _MasterItem(
+        title: 'User Management',
+        icon: Icons.people_outline,
+        route: AppRouter.userManagement,
+        isAdmin: true,
+      ),
+      const _MasterItem(
+        title: 'Backup Encryption Tools',
+        icon: Icons.lock_clock_outlined,
+        route: AppRouter.backupEncryptionTools,
+        isAdmin: false,
+      ),
     ];
 
     return Scaffold(
@@ -96,10 +114,12 @@ class _MasterItem {
   final String title;
   final IconData icon;
   final String route;
+  final bool isAdmin;
 
   const _MasterItem({
     required this.title,
     required this.icon,
     required this.route,
+    this.isAdmin = false,
   });
 }

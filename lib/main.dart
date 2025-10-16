@@ -20,32 +20,49 @@ Future<void> main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // --- START OF CHANGE: safely preload master data ---
+
+  // Initialize MasterService with real-time listeners
+  // This will automatically sync all master data changes from Firestore
   try {
-    await MasterService.loadAllMasters();
-    debugPrint('✅ Master data preloaded successfully');
+    await MasterService.instance.initialize();
+    debugPrint('✅ MasterService initialized with real-time sync');
   } catch (e, st) {
-    // On Web, this will catch permission-denied if not logged in yet
-    debugPrint('⚠️ Warning: could not preload master data: $e');
+    // On Web, this may fail if not logged in yet (permission denied)
+    // The service will retry initialization automatically when user logs in
+    debugPrint('⚠️ Warning: MasterService initialization deferred: $e');
     debugPrint(st.toString());
   }
-  // --- END OF CHANGE ---
 
   if (kIsWeb) {
-    // Persist login across sessions on Web
+    // === WEB-SPECIFIC CONFIGURATION ===
+
+    // 1. Persist login across sessions on Web
     await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 
-    // Enable Firestore persistence with tab sync, ignore if already enabled
+    // 2. Enable Firestore persistence with tab sync
+    // This allows offline access and cross-tab synchronization
     try {
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
+      debugPrint('✅ Firestore persistence enabled for web');
     } on FirebaseException catch (e) {
-      if (e.code != 'failed-precondition') {
-        // Re-throw if it's a different error
+      if (e.code == 'failed-precondition') {
+        // Multiple tabs open, persistence can only be enabled in one tab at a time
+        debugPrint('⚠️ Firestore persistence already enabled in another tab');
+      } else {
+        debugPrint('❌ Failed to enable Firestore persistence: ${e.message}');
         rethrow;
       }
     }
+
+    // 3. Set up web-specific error handling for uncaught errors
+    FlutterError.onError = (FlutterErrorDetails details) {
+      debugPrint('❌ Flutter Error: ${details.exception}');
+      debugPrint(details.stack.toString());
+      // In production, you might want to send this to an error tracking service
+    };
   } else {
     // Mobile-only: initialize Crashlytics
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;

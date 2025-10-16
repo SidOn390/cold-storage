@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cold_storage/services/encryption_service.dart';
 
 import 'backup_file_ops_types.dart';
 import 'backup_file_ops_stub.dart'
@@ -46,6 +47,7 @@ class BackupService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BackupFileOps _fileOps;
+  final EncryptionService _encryptionService = EncryptionService();
 
   static const _schemaVersion = 1;
   static const List<String> _collections = <String>[
@@ -57,12 +59,48 @@ class BackupService {
     'deliveries',
   ];
 
-  Future<BackupResult> exportToLocal() async {
+  /// Export backup to local storage
+  /// Set [encrypt] to true for encrypted backup (default: true)
+  /// Optionally provide [password] for password-based encryption
+  Future<BackupResult> exportToLocal({
+    bool encrypt = true,
+    String? password,
+  }) async {
     try {
       final payload = await _buildExportPayload();
-      final fileName = _buildFileName();
-      final jsonString = const JsonEncoder.withIndent('  ').convert(payload);
-      final location = await _fileOps.saveBackupFile(fileName, jsonString);
+      final fileName = _buildFileName(encrypted: encrypt);
+
+      String fileContent;
+
+      if (encrypt) {
+        // Encrypt the backup
+        final jsonString = const JsonEncoder.withIndent('  ').convert(payload);
+
+        if (password != null && password.isNotEmpty) {
+          // Use password-based encryption
+          final encryptedData = await _encryptionService.encryptWithPassword(
+            jsonString,
+            password,
+          );
+          fileContent = jsonEncode({
+            'format': 'cold_storage_encrypted_backup',
+            'format_version': '2.0',
+            'password_protected': true,
+            'encrypted_data': encryptedData,
+          });
+        } else {
+          // Use device-based encryption
+          fileContent = await _encryptionService.encryptBackup(
+            jsonData: jsonString,
+            backupVersion: _schemaVersion.toString(),
+          );
+        }
+      } else {
+        // Plain JSON backup (not recommended)
+        fileContent = const JsonEncoder.withIndent('  ').convert(payload);
+      }
+
+      final location = await _fileOps.saveBackupFile(fileName, fileContent);
       if (location == null) {
         return BackupResult.failure('Backup cancelled by user.');
       }
@@ -73,15 +111,60 @@ class BackupService {
     }
   }
 
-  Future<RestoreResult> importFromLocal() async {
+  /// Import backup from local storage
+  /// Optionally provide [password] if backup is password-protected
+  Future<RestoreResult> importFromLocal({String? password}) async {
     try {
       final selection = await _fileOps.pickBackupFile();
       if (selection == null) {
         return RestoreResult.failure('No backup file selected.');
       }
-      final decoded = json.decode(selection.contents);
-      if (decoded is! Map<String, dynamic>) {
-        return RestoreResult.failure('Backup file has invalid format.');
+
+      // Check if backup is encrypted
+      final isEncrypted = _encryptionService.isEncrypted(selection.contents);
+
+      Map<String, dynamic> decoded;
+
+      if (isEncrypted) {
+        // Decrypt backup
+        try {
+          final backupStructure = jsonDecode(selection.contents);
+          final isPasswordProtected =
+              backupStructure['password_protected'] == true;
+
+          if (isPasswordProtected) {
+            // Password-protected backup
+            if (password == null || password.isEmpty) {
+              return RestoreResult.failure(
+                'Backup is password-protected. Please provide password.',
+              );
+            }
+
+            final encryptedData = backupStructure['encrypted_data'] as String;
+            final decryptedJson = await _encryptionService.decryptWithPassword(
+              encryptedData,
+              password,
+            );
+            decoded = jsonDecode(decryptedJson);
+          } else {
+            // Device-based encryption
+            final decryptedBackup = await _encryptionService.decryptBackup(
+              selection.contents,
+            );
+            final dataJson = decryptedBackup['data'] as String;
+            decoded = jsonDecode(dataJson);
+          }
+        } on Exception catch (e) {
+          return RestoreResult.failure(
+            'Failed to decrypt backup. Wrong password or corrupted file: $e',
+          );
+        }
+      } else {
+        // Plain JSON backup
+        decoded = json.decode(selection.contents);
+        if (decoded is! Map<String, dynamic>) {
+          return RestoreResult.failure('Backup file has invalid format.');
+        }
       }
 
       _validateSchema(decoded);
@@ -121,10 +204,11 @@ class BackupService {
     };
   }
 
-  String _buildFileName() {
+  String _buildFileName({bool encrypted = true}) {
     final timestamp =
         DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
-    return 'cold_storage_backup_$timestamp.json';
+    final suffix = encrypted ? 'encrypted' : 'plain';
+    return 'cold_storage_backup_${suffix}_$timestamp.json';
   }
 
   void _validateSchema(Map<String, dynamic> decoded) {

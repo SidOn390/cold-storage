@@ -2,10 +2,15 @@
 
 import 'package:cold_storage/models/delivery_model.dart';
 import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/services/referential_integrity_service.dart';
+import 'package:cold_storage/services/delivery_validation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final ReferentialIntegrityService _integrity = ReferentialIntegrityService();
+  final DeliveryValidationService _deliveryValidation =
+      DeliveryValidationService();
 
   // ─── Cold Storages ─────────────────────────────────────────────────────
   Stream<List<Map<String, dynamic>>> getColdStorages() => _db
@@ -22,11 +27,29 @@ class FirestoreService {
       .collection('cold_storages')
       .add({'name': name.trim(), 'name_lowercase': name.trim().toLowerCase()});
 
-  Future<void> updateColdStorage(String id, String newName) =>
-      _db.collection('cold_storages').doc(id).update({
-        'name': newName.trim(),
-        'name_lowercase': newName.trim().toLowerCase(),
-      });
+  /// Updates a cold storage name with CASCADE UPDATE to all references.
+  /// This updates receipts and deliveries that reference the old name.
+  Future<void> updateColdStorage(
+    String id,
+    String newName, {
+    String? oldName,
+  }) async {
+    final trimmedNewName = newName.trim();
+
+    // If oldName provided and different, cascade update all references
+    if (oldName != null && oldName != trimmedNewName) {
+      await _integrity.cascadeUpdateColdStorage(
+        oldName: oldName,
+        newName: trimmedNewName,
+      );
+    }
+
+    // Update the master record
+    return _db.collection('cold_storages').doc(id).update({
+      'name': trimmedNewName,
+      'name_lowercase': trimmedNewName.toLowerCase(),
+    });
+  }
 
   Future<void> deleteColdStorage(String id) =>
       _db.collection('cold_storages').doc(id).delete();
@@ -54,12 +77,30 @@ class FirestoreService {
         'weight': weight,
       });
 
-  Future<void> updateProduct(String id, String newName, double weight) =>
-      _db.collection('products').doc(id).update({
-        'name': newName.trim(),
-        'name_lowercase': newName.trim().toLowerCase(),
-        'weight': weight,
-      });
+  /// Updates a product with CASCADE UPDATE to all references.
+  Future<void> updateProduct(
+    String id,
+    String newName,
+    double weight, {
+    String? oldName,
+  }) async {
+    final trimmedNewName = newName.trim();
+
+    // If oldName provided and different, cascade update all references
+    if (oldName != null && oldName != trimmedNewName) {
+      await _integrity.cascadeUpdateProduct(
+        oldName: oldName,
+        newName: trimmedNewName,
+      );
+    }
+
+    // Update the master record
+    return _db.collection('products').doc(id).update({
+      'name': trimmedNewName,
+      'name_lowercase': trimmedNewName.toLowerCase(),
+      'weight': weight,
+    });
+  }
 
   Future<void> deleteProduct(String id) =>
       _db.collection('products').doc(id).delete();
@@ -80,11 +121,24 @@ class FirestoreService {
     'name_lowercase': name.trim().toLowerCase(),
   });
 
-  Future<void> updateBrand(String id, String newName) =>
-      _db.collection('brands').doc(id).update({
-        'name': newName.trim(),
-        'name_lowercase': newName.trim().toLowerCase(),
-      });
+  /// Updates a brand with CASCADE UPDATE to all references.
+  Future<void> updateBrand(String id, String newName, {String? oldName}) async {
+    final trimmedNewName = newName.trim();
+
+    // If oldName provided and different, cascade update all references
+    if (oldName != null && oldName != trimmedNewName) {
+      await _integrity.cascadeUpdateBrand(
+        oldName: oldName,
+        newName: trimmedNewName,
+      );
+    }
+
+    // Update the master record
+    return _db.collection('brands').doc(id).update({
+      'name': trimmedNewName,
+      'name_lowercase': trimmedNewName.toLowerCase(),
+    });
+  }
 
   Future<void> deleteBrand(String id) =>
       _db.collection('brands').doc(id).delete();
@@ -105,11 +159,28 @@ class FirestoreService {
     'name_lowercase': name.trim().toLowerCase(),
   });
 
-  Future<void> updateCompany(String id, String newName) =>
-      _db.collection('companies').doc(id).update({
-        'name': newName.trim(),
-        'name_lowercase': newName.trim().toLowerCase(),
-      });
+  /// Updates a company with CASCADE UPDATE to all references.
+  Future<void> updateCompany(
+    String id,
+    String newName, {
+    String? oldName,
+  }) async {
+    final trimmedNewName = newName.trim();
+
+    // If oldName provided and different, cascade update all references
+    if (oldName != null && oldName != trimmedNewName) {
+      await _integrity.cascadeUpdateCompany(
+        oldName: oldName,
+        newName: trimmedNewName,
+      );
+    }
+
+    // Update the master record
+    return _db.collection('companies').doc(id).update({
+      'name': trimmedNewName,
+      'name_lowercase': trimmedNewName.toLowerCase(),
+    });
+  }
 
   Future<void> deleteCompany(String id) =>
       _db.collection('companies').doc(id).delete();
@@ -159,6 +230,19 @@ class FirestoreService {
     return _db.collection('receipts').doc(id).delete();
   }
 
+  /// CASCADE DELETE: Delete receipt and all associated deliveries
+  Future<void> cascadeDeleteReceipt({
+    required String receiptId,
+    required String receiptNumber,
+    required String coldStorageName,
+  }) {
+    return _integrity.cascadeDeleteReceipt(
+      receiptId: receiptId,
+      receiptNumber: receiptNumber,
+      coldStorageName: coldStorageName,
+    );
+  }
+
   // ─── Generic Master Data ────────────────────────────────────────────────
 
   /// Adds a new master data item to the specified collection if it doesn't already exist.
@@ -183,44 +267,52 @@ class FirestoreService {
   }
   // Add these methods to your FirestoreService class
 
-  /// Checks if a given brand name is used in any receipt.
+  // ─── Referential Integrity Checks ──────────────────────────────────────
+
+  /// Checks if a brand is used anywhere (comprehensive check).
   Future<bool> isBrandInUse(String brandName) async {
-    final querySnapshot = await _db
-        .collection('receipts')
-        .where('brandName', isEqualTo: brandName)
-        .limit(1)
-        .get();
-    return querySnapshot.docs.isNotEmpty;
+    final result = await _integrity.checkBrandUsage(brandName);
+    return result.isInUse;
   }
 
-  /// Checks if a given product name is used in any receipt.
+  /// Checks if a product is used anywhere (comprehensive check).
   Future<bool> isProductInUse(String productName) async {
-    final querySnapshot = await _db
-        .collection('receipts')
-        .where('productName', isEqualTo: productName)
-        .limit(1)
-        .get();
-    return querySnapshot.docs.isNotEmpty;
+    final result = await _integrity.checkProductUsage(productName);
+    return result.isInUse;
   }
 
-  /// Checks if a given cold storage name is used in any receipt.
+  /// Checks if a cold storage is used anywhere (comprehensive check).
+  /// Checks both receipts AND deliveries.
   Future<bool> isColdStorageInUse(String coldStorageName) async {
-    final querySnapshot = await _db
-        .collection('receipts')
-        .where('coldStorageName', isEqualTo: coldStorageName)
-        .limit(1)
-        .get();
-    return querySnapshot.docs.isNotEmpty;
+    final result = await _integrity.checkColdStorageUsage(coldStorageName);
+    return result.isInUse;
   }
 
-  /// Checks if a given company name is used in any receipt.
+  /// Checks if a company is used anywhere (comprehensive check).
   Future<bool> isCompanyInUse(String companyName) async {
-    final querySnapshot = await _db
-        .collection('receipts')
-        .where('companyName', isEqualTo: companyName)
-        .limit(1)
-        .get();
-    return querySnapshot.docs.isNotEmpty;
+    final result = await _integrity.checkCompanyUsage(companyName);
+    return result.isInUse;
+  }
+
+  /// Get detailed usage information for a master data item.
+  /// Returns a comprehensive report including count and affected collections.
+  Future<IntegrityCheckResult> getDetailedUsage({
+    required String type,
+    required String name,
+  }) async {
+    switch (type.toLowerCase()) {
+      case 'brand':
+        return _integrity.checkBrandUsage(name);
+      case 'product':
+        return _integrity.checkProductUsage(name);
+      case 'cold_storage':
+      case 'coldstorage':
+        return _integrity.checkColdStorageUsage(name);
+      case 'company':
+        return _integrity.checkCompanyUsage(name);
+      default:
+        throw ArgumentError('Unknown type: $type');
+    }
   }
   // Add these methods to your FirestoreService class
 
@@ -253,6 +345,85 @@ class FirestoreService {
     return _db.collection('receipts').doc(receiptId).update({
       'isPaid': !currentStatus,
     });
+  }
+
+  // ─── Delivery Validation ────────────────────────────────────────────────
+
+  /// Calculate accurate remaining quantity by querying actual deliveries.
+  /// This is the SOURCE OF TRUTH - always recalculates from delivery records.
+  Future<int> calculateRemainingQuantity({
+    required String receiptNumber,
+    required String coldStorageName,
+    required int inwardQuantity,
+    String? excludeDeliveryId,
+  }) {
+    return _deliveryValidation.calculateRemainingQuantity(
+      receiptNumber: receiptNumber,
+      coldStorageName: coldStorageName,
+      inwardQuantity: inwardQuantity,
+      excludeDeliveryId: excludeDeliveryId,
+    );
+  }
+
+  /// Validate a delivery quantity before creating/updating.
+  /// Returns comprehensive validation result with details.
+  Future<DeliveryValidationResult> validateDelivery({
+    required Receipt receipt,
+    required int attemptedQuantity,
+    String? excludeDeliveryId,
+  }) {
+    return _deliveryValidation.validateDelivery(
+      receipt: receipt,
+      attemptedQuantity: attemptedQuantity,
+      excludeDeliveryId: excludeDeliveryId,
+    );
+  }
+
+  /// Recalculate and sync a receipt's remaining quantity from actual deliveries.
+  /// Fixes any discrepancies between stored value and reality.
+  Future<void> syncReceiptRemainingQuantity({
+    required String receiptId,
+    required String receiptNumber,
+    required String coldStorageName,
+    required int inwardQuantity,
+  }) {
+    return _deliveryValidation.syncReceiptRemainingQuantity(
+      receiptId: receiptId,
+      receiptNumber: receiptNumber,
+      coldStorageName: coldStorageName,
+      inwardQuantity: inwardQuantity,
+    );
+  }
+
+  /// Batch sync ALL receipts' remaining quantities.
+  /// Useful for data maintenance or after bulk operations.
+  /// Returns the number of receipts that were updated.
+  Future<int> syncAllReceiptsRemainingQuantity() {
+    return _deliveryValidation.syncAllReceiptsRemainingQuantity();
+  }
+
+  /// Get comprehensive delivery summary for a receipt.
+  Future<Map<String, dynamic>> getReceiptDeliverySummary({
+    required String receiptNumber,
+    required String coldStorageName,
+    required int inwardQuantity,
+  }) {
+    return _deliveryValidation.getReceiptDeliverySummary(
+      receiptNumber: receiptNumber,
+      coldStorageName: coldStorageName,
+      inwardQuantity: inwardQuantity,
+    );
+  }
+
+  /// Get all deliveries for a specific receipt.
+  Future<List<Map<String, dynamic>>> getDeliveriesForReceipt({
+    required String receiptNumber,
+    required String coldStorageName,
+  }) {
+    return _deliveryValidation.getDeliveriesForReceipt(
+      receiptNumber: receiptNumber,
+      coldStorageName: coldStorageName,
+    );
   }
 }
 

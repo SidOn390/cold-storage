@@ -106,7 +106,8 @@ class _CompanyMasterScreenState extends State<CompanyMasterScreen> {
                     });
                     return;
                   }
-                  await _firestore.updateCompany(id, name);
+                  // CASCADE UPDATE: Pass oldName to update all references
+                  await _firestore.updateCompany(id, name, oldName: original);
                 }
                 if (mounted) {
                   Navigator.of(dialogContext).pop(true);

@@ -16,6 +16,10 @@ import 'screens/masters/cold_storage_master_screen.dart';
 import 'screens/masters/product_master_screen.dart';
 import 'screens/masters/brand_master_screen.dart';
 import 'screens/masters/company_master_screen.dart';
+import 'screens/admin/data_maintenance_screen.dart';
+import 'screens/admin/user_management_screen.dart';
+import 'screens/tools/backup_encryption_tools_screen.dart';
+import 'screens/setup/initial_setup_screen.dart';
 import 'package:cold_storage/models/receipt_model.dart';
 
 class AppRouter {
@@ -32,6 +36,10 @@ class AppRouter {
   static const productTypeMaster = '/masters/product-types';
   static const brandMaster = '/masters/brands';
   static const companyMaster = '/masters/companies';
+  static const dataMaintenance = '/admin/data-maintenance';
+  static const userManagement = '/admin/user-management';
+  static const backupEncryptionTools = '/tools/backup-encryption';
+  static const initialSetup = '/setup/initial';
   static const String billingDetail = '/billingDetail';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -92,6 +100,22 @@ class AppRouter {
       case companyMaster:
         return MaterialPageRoute(
           builder: (_) => screenBuilder(const CompanyMasterScreen()),
+        );
+      case dataMaintenance:
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const DataMaintenanceScreen()),
+        );
+      case userManagement:
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const UserManagementScreen()),
+        );
+      case backupEncryptionTools:
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const BackupEncryptionToolsScreen()),
+        );
+      case initialSetup:
+        return MaterialPageRoute(
+          builder: (_) => const InitialSetupScreen(),
         );
       default:
         return MaterialPageRoute(builder: (_) => const AuthGate());

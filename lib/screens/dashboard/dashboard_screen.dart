@@ -6,7 +6,6 @@ import 'package:cold_storage/services/auth_service.dart';
 import 'package:cold_storage/app_router.dart';
 import 'package:cold_storage/widgets/app_background.dart';
 import 'package:cold_storage/services/backup_service.dart';
-import 'package:cold_storage/services/master_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -271,8 +270,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
 
     if (result.success) {
-      await MasterService.loadAllMasters();
-      if (!mounted) return;
+      // Note: MasterService now automatically syncs via real-time listeners.
+      // No manual refresh needed!
       final source = result.source ?? 'backup file';
       showAppNotification(
         context: context,

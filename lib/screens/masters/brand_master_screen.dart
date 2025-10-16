@@ -100,7 +100,8 @@ class _BrandMasterScreenState extends State<BrandMasterScreen> {
                     });
                     return;
                   }
-                  await _firestore.updateBrand(id, name);
+                  // CASCADE UPDATE: Pass oldName to update all references
+                  await _firestore.updateBrand(id, name, oldName: original);
                 }
                 Navigator.of(dialogContext).pop(true);
               } catch (e) {

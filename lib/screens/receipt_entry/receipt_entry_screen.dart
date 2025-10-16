@@ -57,6 +57,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _hasDeliveries = false; // Track if receipt has existing deliveries
 
   bool get _isEditMode => widget.receipt != null;
 
@@ -72,7 +73,7 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     }
   }
 
-  void _populateFieldsForEdit() {
+  void _populateFieldsForEdit() async {
     final r = widget.receipt!;
     _receiptNumberController.text = r.receiptNumber;
     _coldStorageController.text = r.coldStorageName;
@@ -89,6 +90,36 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _selectedProduct = r.productName;
     _selectedBrand = r.brandName;
     _selectedCompany = r.companyName;
+
+    // Check if deliveries exist for this receipt
+    try {
+      final deliveries = await _firestoreService.getDeliveriesForReceipt(
+        receiptNumber: r.receiptNumber,
+        coldStorageName: r.coldStorageName,
+      );
+      if (mounted) {
+        setState(() {
+          _hasDeliveries = deliveries.isNotEmpty;
+        });
+
+        // Show warning if deliveries exist
+        if (_hasDeliveries) {
+          Future.delayed(Duration.zero, () {
+            if (mounted) {
+              showAppNotification(
+                context: context,
+                message: 'Warning: This receipt has ${deliveries.length} delivery record(s). '
+                    'Receipt Number and Cold Storage cannot be changed.',
+                type: NotificationType.info,
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // If check fails, assume no deliveries
+      debugPrint('Error checking deliveries: $e');
+    }
   }
 
   @override
@@ -652,10 +683,14 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
                                     TextFormField(
                                       controller: _receiptNumberController,
                                       focusNode: _receiptNumberFocusNode,
-                                      enabled: !_isEditMode,
+                                      enabled: !_isEditMode, // Always disabled in edit mode
                                       autofocus: !_isEditMode,
-                                      decoration: const InputDecoration(
+                                      decoration: InputDecoration(
                                         labelText: 'Receipt Number',
+                                        helperText: _isEditMode && _hasDeliveries
+                                          ? 'Cannot be changed (has deliveries)'
+                                          : null,
+                                        helperMaxLines: 2,
                                       ),
                                       keyboardType: TextInputType.number,
                                       inputFormatters: [
@@ -670,14 +705,29 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
                                       ).requestFocus(_coldStorageFocusNode),
                                     ),
                                     const SizedBox(height: 16),
-                                    _buildAutocompleteField(
-                                      labelText: 'Cold Storage',
-                                      masterType: MasterType.coldStorage,
-                                      focusNode: _coldStorageFocusNode,
-                                      controller: _coldStorageController,
-                                      options: _coldStorageOptions,
-                                      nextFocusNode: _dateFocusNode,
-                                      enabled: !_isEditMode,
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _buildAutocompleteField(
+                                          labelText: 'Cold Storage',
+                                          masterType: MasterType.coldStorage,
+                                          focusNode: _coldStorageFocusNode,
+                                          controller: _coldStorageController,
+                                          options: _coldStorageOptions,
+                                          nextFocusNode: _dateFocusNode,
+                                          enabled: !_isEditMode, // Always disabled in edit mode
+                                        ),
+                                        if (_isEditMode && _hasDeliveries)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 12, top: 4),
+                                            child: Text(
+                                              'Cannot be changed (has deliveries)',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     const SizedBox(height: 16),
                                     TextFormField(

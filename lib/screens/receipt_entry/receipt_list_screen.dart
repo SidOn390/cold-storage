@@ -383,13 +383,28 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, Receipt receipt) async {
+    // First, check if this receipt has deliveries
+    final deliveries = await _firestoreService.getDeliveriesForReceipt(
+      receiptNumber: receipt.receiptNumber,
+      coldStorageName: receipt.coldStorageName,
+    );
+
+    final hasDeliveries = deliveries.isNotEmpty;
+
+    // Show appropriate confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm Deletion'),
-        content: Text(
-          'Are you sure you want to delete Receipt #${receipt.receiptNumber}?',
-        ),
+        content: hasDeliveries
+            ? Text(
+                'Receipt #${receipt.receiptNumber} has ${deliveries.length} delivery record(s).\n\n'
+                'Deleting this receipt will also DELETE ALL associated deliveries.\n\n'
+                'This action cannot be undone. Continue?',
+              )
+            : Text(
+                'Are you sure you want to delete Receipt #${receipt.receiptNumber}?',
+              ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -400,20 +415,38 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
+            child: Text(hasDeliveries ? 'Delete All' : 'Delete'),
           ),
         ],
       ),
     );
+
     if (confirm == true) {
       try {
-        await _firestoreService.deleteReceipt(receipt.id!);
-        if (mounted) {
-          showAppNotification(
-            context: context,
-            message: 'Receipt deleted successfully.',
-            type: NotificationType.error,
+        if (hasDeliveries) {
+          // Use CASCADE DELETE - deletes receipt and all deliveries
+          await _firestoreService.cascadeDeleteReceipt(
+            receiptId: receipt.id!,
+            receiptNumber: receipt.receiptNumber,
+            coldStorageName: receipt.coldStorageName,
           );
+          if (mounted) {
+            showAppNotification(
+              context: context,
+              message: 'Receipt and ${deliveries.length} delivery record(s) deleted successfully.',
+              type: NotificationType.success,
+            );
+          }
+        } else {
+          // Simple delete - no deliveries exist
+          await _firestoreService.deleteReceipt(receipt.id!);
+          if (mounted) {
+            showAppNotification(
+              context: context,
+              message: 'Receipt deleted successfully.',
+              type: NotificationType.success,
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
