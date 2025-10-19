@@ -485,6 +485,20 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               ),
+                            // Setup button for first-time super admin creation
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/setup/initial');
+                              },
+                              icon: const Icon(Icons.admin_panel_settings),
+                              label: const Text('First Time Setup'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.blue,
+                              ),
+                            ),
                           ],
                         ),
                       ),

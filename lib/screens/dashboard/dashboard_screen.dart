@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cold_storage/services/auth_service.dart';
 import 'package:cold_storage/app_router.dart';
 import 'package:cold_storage/widgets/app_background.dart';
@@ -25,9 +26,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final email = user?.email ?? '';
-    final username = email.contains('@') ? email.split('@').first : email;
-    final greeting = 'Welcome back, ${_capitalize(username)}!';
 
     final items = <_DashboardItem>[
       const _DashboardItem(
@@ -109,13 +107,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                Text(
-                  greeting,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                // Display user's display name from Firestore
+                if (user != null)
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      String displayName = 'User';
+
+                      if (snapshot.hasData && snapshot.data?.data() != null) {
+                        final userData = snapshot.data!.data() as Map<String, dynamic>;
+                        displayName = userData['displayName'] ?? 'User';
+                      } else if (!snapshot.hasData) {
+                        // Fallback to email username while loading
+                        final email = user.email ?? '';
+                        displayName = email.contains('@') ? email.split('@').first : email;
+                        displayName = _capitalize(displayName);
+                      }
+
+                      return Text(
+                        'Welcome back, $displayName!',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
                   ),
-                ),
                 const SizedBox(height: 24),
                 Center(
                   child: ConstrainedBox(

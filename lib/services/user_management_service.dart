@@ -2,12 +2,50 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cold_storage/models/app_user.dart';
 import 'package:cold_storage/models/user_role.dart';
+import 'package:cold_storage/firebase_options.dart';
 
 class UserManagementService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+
+  // Secondary Firebase app for creating users without affecting current session
+  FirebaseApp? _secondaryApp;
+  FirebaseAuth? _secondaryAuth;
+
+  // ─── Secondary App Initialization ──────────────────────────────────
+
+  /// Initialize secondary Firebase app for user creation
+  Future<void> _initializeSecondaryApp() async {
+    if (_secondaryApp != null && _secondaryAuth != null) return;
+
+    try {
+      _secondaryApp = await Firebase.initializeApp(
+        name: 'UserManagementSecondary',
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      _secondaryAuth = FirebaseAuth.instanceFor(app: _secondaryApp!);
+
+      // Set persistence to NONE to prevent storage conflicts with primary app
+      // This is crucial on web to avoid session interference
+      await _secondaryAuth!.setPersistence(Persistence.NONE);
+    } catch (e) {
+      // App might already exist
+      try {
+        _secondaryApp = Firebase.app('UserManagementSecondary');
+        _secondaryAuth = FirebaseAuth.instanceFor(app: _secondaryApp!);
+
+        // Ensure persistence is set to NONE
+        await _secondaryAuth!.setPersistence(Persistence.NONE);
+      } catch (e) {
+        rethrow;
+      }
+    }
+  }
 
   // ─── User CRUD Operations ──────────────────────────────────────────
 
@@ -44,6 +82,8 @@ class UserManagementService {
   }
 
   /// Create a new user with authentication and profile
+  ///
+  /// Uses a secondary Firebase app to create users without affecting the current admin session.
   Future<AppUser> createUser({
     required String email,
     required String password,
@@ -51,14 +91,24 @@ class UserManagementService {
     required UserRole role,
     String? phoneNumber,
   }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('Must be logged in to create users');
+    }
+
+    final createdByUid = currentUser.uid;
+    final adminEmail = currentUser.email;
+
     try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('Must be logged in to create users');
+      // Initialize secondary app for user creation
+      await _initializeSecondaryApp();
+
+      if (_secondaryAuth == null) {
+        throw Exception('Failed to initialize secondary authentication');
       }
 
-      // Create Firebase Auth user
-      final userCredential = await _auth.createUserWithEmailAndPassword(
+      // Create Firebase Auth user using secondary app
+      final userCredential = await _secondaryAuth!.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -73,18 +123,27 @@ class UserManagementService {
         role: role,
         isActive: true,
         phoneNumber: phoneNumber,
-        createdBy: currentUser.uid,
+        createdBy: createdByUid,
         createdAt: Timestamp.now(),
       );
 
       await _db.collection('users').doc(newUser.uid).set(appUser.toJson());
 
-      // Sign out the newly created user and sign back in as admin
-      await _auth.signOut();
-      // Note: In production, you'd use Firebase Admin SDK for this
+      // Sign out the newly created user from secondary app only
+      await _secondaryAuth!.signOut();
+
+      // Verify admin is still logged in
+      final stillLoggedIn = _auth.currentUser != null;
+      if (!stillLoggedIn) {
+        throw Exception('Admin session was lost. Please log in again.');
+      }
 
       return appUser;
     } catch (e) {
+      // If admin was signed out, provide helpful error message
+      if (_auth.currentUser == null && adminEmail != null) {
+        throw Exception('Admin session ended. This can happen on web browsers. Please log back in as $adminEmail');
+      }
       rethrow;
     }
   }
@@ -121,13 +180,81 @@ class UserManagementService {
   }
 
   /// Hard delete user (removes from Firestore and Auth)
-  /// Note: Requires Firebase Admin SDK in production
-  Future<void> deleteUser(String uid) async {
-    // Delete from Firestore
-    await _db.collection('users').doc(uid).delete();
+  ///
+  /// Smart deletion that works with or without Cloud Functions:
+  /// - If Cloud Functions deployed: Deletes from both Auth and Firestore
+  /// - If Cloud Functions not deployed: Deletes from Firestore only
+  ///
+  /// Returns a map with:
+  /// - 'success': bool - whether operation succeeded
+  /// - 'fullDeletion': bool - whether deleted from both Auth and Firestore
+  /// - 'message': String - user-friendly message
+  Future<Map<String, dynamic>> deleteUser(String uid) async {
+    try {
+      // Try Cloud Function first (best option - deletes from both)
+      final callable = _functions.httpsCallable('deleteUser');
+      final result = await callable.call({'uid': uid});
 
-    // Note: Deleting from Firebase Auth requires Admin SDK
-    // In production, this would be done via Cloud Function
+      if (result.data['success'] == true) {
+        return {
+          'success': true,
+          'fullDeletion': true,
+          'message': 'User deleted successfully from both Authentication and Database.',
+        };
+      } else {
+        throw Exception(result.data['message'] ?? 'Failed to delete user');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      // Handle specific Cloud Functions errors
+      if (e.code == 'not-found' || e.message?.contains('not find function') == true) {
+        // Cloud Function not deployed - fall back to Firestore-only deletion
+        return await _fallbackDeleteUser(uid);
+      }
+
+      switch (e.code) {
+        case 'unauthenticated':
+          throw Exception('You must be logged in to delete users.');
+        case 'permission-denied':
+          throw Exception('Only super admins can delete users.');
+        case 'invalid-argument':
+          throw Exception(e.message ?? 'Invalid user ID provided.');
+        default:
+          // For other errors, try fallback deletion
+          return await _fallbackDeleteUser(uid);
+      }
+    } catch (e) {
+      // If Cloud Function fails for any reason, try fallback
+      if (e.toString().contains('not find function') ||
+          e.toString().contains('PERMISSION_DENIED') ||
+          e.toString().contains('UNAVAILABLE')) {
+        return await _fallbackDeleteUser(uid);
+      }
+      throw Exception('Failed to delete user: $e');
+    }
+  }
+
+  /// Fallback deletion when Cloud Functions are not available
+  /// Deletes from Firestore only and returns partial success
+  Future<Map<String, dynamic>> _fallbackDeleteUser(String uid) async {
+    try {
+      // Delete from Firestore only
+      await _db.collection('users').doc(uid).delete();
+
+      return {
+        'success': true,
+        'fullDeletion': false,
+        'message': 'User deleted from app database.\n\n'
+            '⚠️ Note: User still exists in Firebase Authentication.\n\n'
+            'To fully delete the user:\n'
+            '1. Deploy Cloud Functions, OR\n'
+            '2. Manually delete from Firebase Console:\n'
+            '   Authentication → Users → Delete user\n\n'
+            'The user cannot access the app anymore, but can still '
+            'log in with their credentials until removed from Authentication.',
+      };
+    } catch (e) {
+      throw Exception('Failed to delete user from database: $e');
+    }
   }
 
   /// Update last login time

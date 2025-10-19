@@ -14,12 +14,14 @@ class CreateSuperAdminHelper {
       final firestore = FirebaseFirestore.instance;
 
       // Super Admin Details
-      const email = 'admin@coldstorage.com';
+      const username = 'Admin';
+      const email = 'admin@coldapp.com'; // Using app's standard email format (lowercase)
       const password = 'Admin123';
       const displayName = 'Siddharth Shah';
       const role = 'super_admin';
 
       debugPrint('Creating Super Admin User...');
+      debugPrint('Username: $username');
       debugPrint('Email: $email');
       debugPrint('Display Name: $displayName');
 
@@ -86,6 +88,7 @@ class CreateSuperAdminHelper {
 
       return {
         'success': true,
+        'username': username,
         'email': email,
         'password': password,
         'displayName': displayName,
