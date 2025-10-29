@@ -10,6 +10,7 @@ import 'package:cold_storage/models/rent_rate.dart';
 import 'package:cold_storage/services/firestore_service.dart';
 import 'package:cold_storage/services/rent_rate_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/utils/date_input_formatter.dart';
 import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
 enum MasterType { coldStorage, product, brand, company }
@@ -845,8 +846,11 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
                                       focusNode: _dateFocusNode,
                                       controller: _dateController,
                                       autofocus: _isEditMode,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [DateInputFormatter()],
                                       decoration: InputDecoration(
                                         labelText: 'Inward Date',
+                                        hintText: 'Type: DDMMYY or DDMMYYYY',
                                         suffixIcon: IconButton(
                                           icon: const Icon(
                                             Icons.calendar_today_outlined,
@@ -854,27 +858,11 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
                                           onPressed: () => _selectDate(context),
                                         ),
                                       ),
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please enter a date';
-                                        }
-                                        try {
-                                          DateFormat(
-                                            'dd-MM-yy',
-                                          ).parseStrict(value);
-                                          return null;
-                                        } catch (e) {
-                                          return 'Invalid format (dd-MM-yy)';
-                                        }
-                                      },
+                                      validator: (value) => validateDateFormat(value),
                                       onChanged: (value) {
-                                        try {
-                                          final date = DateFormat(
-                                            'dd-MM-yy',
-                                          ).parseStrict(value);
+                                        final date = parseDateString(value);
+                                        if (date != null) {
                                           setState(() => _selectedDate = date);
-                                        } catch (e) {
-                                          /* Ignore */
                                         }
                                       },
                                       onFieldSubmitted: (_) => FocusScope.of(

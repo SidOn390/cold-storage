@@ -8,6 +8,7 @@ import 'package:cold_storage/models/delivery_model.dart';
 import 'package:cold_storage/models/receipt_model.dart';
 import 'package:cold_storage/services/firestore_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
+import 'package:cold_storage/utils/date_input_formatter.dart';
 import 'package:cold_storage/widgets/app_background.dart';
 
 class DeliveryEntryScreen extends StatefulWidget {
@@ -452,10 +453,11 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
                                   focusNode: _dateFocusNode,
                                   controller: _dateController,
                                   autofocus: _isEditMode,
-                                  keyboardType: TextInputType.datetime,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [DateInputFormatter()],
                                   decoration: InputDecoration(
                                     labelText: 'Delivery Date',
-                                    hintText: 'dd-MM-yy',
+                                    hintText: 'Type: DDMMYY or DDMMYYYY',
                                     helperText: 'Type date or use calendar',
                                     suffixIcon: IconButton(
                                       icon: const Icon(
@@ -464,23 +466,11 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
                                       onPressed: () => _selectDate(context),
                                     ),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter a date';
-                                    }
-                                    try {
-                                      DateFormat('dd-MM-yy').parseStrict(value);
-                                      return null;
-                                    } catch (e) {
-                                      return 'Invalid format (dd-MM-yy)';
-                                    }
-                                  },
+                                  validator: (value) => validateDateFormat(value),
                                   onChanged: (value) {
-                                    try {
-                                      final date = DateFormat('dd-MM-yy').parseStrict(value);
+                                    final date = parseDateString(value);
+                                    if (date != null) {
                                       setState(() => _selectedDate = date);
-                                    } catch (e) {
-                                      /* Ignore invalid input while typing */
                                     }
                                   },
                                   onFieldSubmitted: (_) => _quantityFocusNode.requestFocus(),
