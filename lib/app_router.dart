@@ -16,6 +16,8 @@ import 'screens/masters/cold_storage_master_screen.dart';
 import 'screens/masters/product_master_screen.dart';
 import 'screens/masters/brand_master_screen.dart';
 import 'screens/masters/company_master_screen.dart';
+import 'screens/masters/rent_rate_master_screen.dart';
+import 'screens/billing/rent_bill_screen.dart';
 import 'screens/admin/data_maintenance_screen.dart';
 import 'screens/admin/user_management_screen.dart';
 import 'screens/tools/backup_encryption_tools_screen.dart';
@@ -36,6 +38,8 @@ class AppRouter {
   static const productTypeMaster = '/masters/product-types';
   static const brandMaster = '/masters/brands';
   static const companyMaster = '/masters/companies';
+  static const rentRateMaster = '/masters/rent-rates';
+  static const rentBill = '/billing/rent-bill';
   static const dataMaintenance = '/admin/data-maintenance';
   static const userManagement = '/admin/user-management';
   static const backupEncryptionTools = '/tools/backup-encryption';
@@ -100,6 +104,16 @@ class AppRouter {
       case companyMaster:
         return MaterialPageRoute(
           builder: (_) => screenBuilder(const CompanyMasterScreen()),
+        );
+      case rentRateMaster:
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const RentRateMasterScreen()),
+        );
+      case rentBill:
+        // TODO: Will accept receipt as argument in Phase 3
+        // final receipt = settings.arguments as Receipt?;
+        return MaterialPageRoute(
+          builder: (_) => screenBuilder(const RentBillScreen()),
         );
       case dataMaintenance:
         return MaterialPageRoute(

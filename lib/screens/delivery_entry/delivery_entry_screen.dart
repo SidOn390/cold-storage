@@ -451,16 +451,39 @@ class _DeliveryEntryScreenState extends State<DeliveryEntryScreen> {
                                 TextFormField(
                                   focusNode: _dateFocusNode,
                                   controller: _dateController,
-                                  readOnly: true,
-                                  autofocus:
-                                      _isEditMode, // --- FIX 3: ADDED AUTOFOCUS ---
-                                  onTap: () => _selectDate(context),
-                                  decoration: const InputDecoration(
+                                  autofocus: _isEditMode,
+                                  keyboardType: TextInputType.datetime,
+                                  decoration: InputDecoration(
                                     labelText: 'Delivery Date',
-                                    suffixIcon: Icon(
-                                      Icons.calendar_today_outlined,
+                                    hintText: 'dd-MM-yy',
+                                    helperText: 'Type date or use calendar',
+                                    suffixIcon: IconButton(
+                                      icon: const Icon(
+                                        Icons.calendar_today_outlined,
+                                      ),
+                                      onPressed: () => _selectDate(context),
                                     ),
                                   ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter a date';
+                                    }
+                                    try {
+                                      DateFormat('dd-MM-yy').parseStrict(value);
+                                      return null;
+                                    } catch (e) {
+                                      return 'Invalid format (dd-MM-yy)';
+                                    }
+                                  },
+                                  onChanged: (value) {
+                                    try {
+                                      final date = DateFormat('dd-MM-yy').parseStrict(value);
+                                      setState(() => _selectedDate = date);
+                                    } catch (e) {
+                                      /* Ignore invalid input while typing */
+                                    }
+                                  },
+                                  onFieldSubmitted: (_) => _quantityFocusNode.requestFocus(),
                                   textInputAction: TextInputAction.next,
                                 ),
                                 const SizedBox(height: 16),

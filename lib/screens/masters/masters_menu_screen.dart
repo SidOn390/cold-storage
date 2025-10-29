@@ -63,6 +63,11 @@ class _MastersMenuScreenState extends State<MastersMenuScreen> {
         route: AppRouter.companyMaster,
       ),
       const _MasterItem(
+        title: 'Rent Rates',
+        icon: Icons.payments_outlined,
+        route: AppRouter.rentRateMaster,
+      ),
+      const _MasterItem(
         title: 'Data Maintenance',
         icon: Icons.settings_suggest_outlined,
         route: AppRouter.dataMaintenance,

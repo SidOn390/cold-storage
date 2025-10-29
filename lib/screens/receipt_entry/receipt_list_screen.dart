@@ -532,6 +532,18 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.receipt),
+                    label: const Text('Generate Bill'),
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRouter.rentBill,
+                        arguments: receipt,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Edit Receipt',

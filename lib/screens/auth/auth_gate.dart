@@ -40,9 +40,12 @@ class _AuthGateState extends State<AuthGate> {
     // This handles the case where initialization failed at app startup
     // because the user wasn't authenticated yet (common on web)
     try {
+      debugPrint('🔄 Initializing MasterService after login...');
       await MasterService.instance.initialize();
+      debugPrint('✅ MasterService initialized');
     } catch (e) {
       // Initialization already completed or failed - safe to ignore
+      debugPrint('⚠️ Service initialization error (may be already initialized): $e');
     }
   }
 }

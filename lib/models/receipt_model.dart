@@ -18,6 +18,13 @@ class Receipt {
   final String status;
   final Timestamp? createdAt;
 
+  // Rent-related fields
+  final String rentType; // 'monthly' or 'seasonal'
+  final double? monthlyRatePerUnit; // For monthly rent
+  final double? labourRatePerUnit;  // For monthly rent
+  final double? seasonalRatePerUnit; // For seasonal rent
+  final double gstPercentage; // Default 18%
+
   Receipt({
     this.id,
     required this.receiptNumber,
@@ -33,6 +40,11 @@ class Receipt {
     this.isPaid = false,
     this.status = 'Active',
     this.createdAt,
+    this.rentType = 'monthly', // Default to monthly
+    this.monthlyRatePerUnit,
+    this.labourRatePerUnit,
+    this.seasonalRatePerUnit,
+    this.gstPercentage = 18.0,
   });
 
   Map<String, dynamic> toJson() {
@@ -50,6 +62,11 @@ class Receipt {
       'isPaid': isPaid,
       'status': status,
       'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'rentType': rentType,
+      'monthlyRatePerUnit': monthlyRatePerUnit,
+      'labourRatePerUnit': labourRatePerUnit,
+      'seasonalRatePerUnit': seasonalRatePerUnit,
+      'gstPercentage': gstPercentage,
     };
   }
 
@@ -70,6 +87,11 @@ class Receipt {
       isPaid: data['isPaid'] ?? false,
       status: data['status'] ?? 'Active',
       createdAt: data['createdAt'],
+      rentType: data['rentType'] ?? 'monthly', // Default to monthly for existing data
+      monthlyRatePerUnit: data['monthlyRatePerUnit']?.toDouble(),
+      labourRatePerUnit: data['labourRatePerUnit']?.toDouble(),
+      seasonalRatePerUnit: data['seasonalRatePerUnit']?.toDouble(),
+      gstPercentage: data['gstPercentage']?.toDouble() ?? 18.0,
     );
   }
   
@@ -91,6 +113,11 @@ class Receipt {
     bool? isPaid,
     String? status,
     Timestamp? createdAt,
+    String? rentType,
+    double? monthlyRatePerUnit,
+    double? labourRatePerUnit,
+    double? seasonalRatePerUnit,
+    double? gstPercentage,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -107,6 +134,11 @@ class Receipt {
       isPaid: isPaid ?? this.isPaid,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      rentType: rentType ?? this.rentType,
+      monthlyRatePerUnit: monthlyRatePerUnit ?? this.monthlyRatePerUnit,
+      labourRatePerUnit: labourRatePerUnit ?? this.labourRatePerUnit,
+      seasonalRatePerUnit: seasonalRatePerUnit ?? this.seasonalRatePerUnit,
+      gstPercentage: gstPercentage ?? this.gstPercentage,
     );
   }
 }

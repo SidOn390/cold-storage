@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/models/rent_type.dart';
+import 'package:cold_storage/models/rent_rate.dart';
 import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/services/rent_rate_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
 import 'package:cold_storage/widgets/app_background.dart'; // 1. Import AppBackground
 
@@ -22,6 +25,7 @@ class ReceiptEntryScreen extends StatefulWidget {
 class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firestoreService = FirestoreService();
+  final _rentRateService = RentRateService.instance;
 
   final _receiptNumberController = TextEditingController();
   final _coldStorageController = TextEditingController();
@@ -59,6 +63,12 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
   bool _isSaving = false;
   bool _hasDeliveries = false; // Track if receipt has existing deliveries
 
+  // Rent-related fields
+  RentType _selectedRentType = RentType.monthly;
+  RentRate? _fetchedRentRate;
+  bool _isFetchingRate = false;
+  String? _rateError;
+
   bool get _isEditMode => widget.receipt != null;
 
   @override
@@ -90,6 +100,22 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     _selectedProduct = r.productName;
     _selectedBrand = r.brandName;
     _selectedCompany = r.companyName;
+
+    // Load rent type and create RentRate object from stored values
+    _selectedRentType = RentType.fromJson(r.rentType);
+    if (r.monthlyRatePerUnit != null || r.seasonalRatePerUnit != null) {
+      _fetchedRentRate = RentRate(
+        coldStorageName: r.coldStorageName,
+        productName: r.productName,
+        rentType: _selectedRentType,
+        monthlyRatePerUnit: r.monthlyRatePerUnit,
+        labourRatePerUnit: r.labourRatePerUnit,
+        seasonalRatePerUnit: r.seasonalRatePerUnit,
+        gstPercentage: r.gstPercentage,
+        createdAt: DateTime.now(),
+        createdBy: 'System',
+      );
+    }
 
     // Check if deliveries exist for this receipt
     try {
@@ -183,6 +209,48 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
     }
   }
 
+  /// Fetch rent rate when cold storage + product + rent type are selected
+  Future<void> _fetchRentRate() async {
+    // Only fetch if we have cold storage, product, and rent type selected
+    if (_selectedColdStorage == null || _selectedProduct == null) {
+      return;
+    }
+
+    setState(() {
+      _isFetchingRate = true;
+      _rateError = null;
+    });
+
+    try {
+      final rate = await _rentRateService.getRateFor(
+        coldStorageName: _selectedColdStorage!,
+        productName: _selectedProduct!,
+        rentType: _selectedRentType,
+      );
+
+      if (mounted) {
+        setState(() {
+          _fetchedRentRate = rate;
+          _isFetchingRate = false;
+
+          if (rate == null) {
+            _rateError = 'No rent rate configured for $_selectedColdStorage - $_selectedProduct (${_selectedRentType.displayName})';
+          } else {
+            _rateError = null;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFetchingRate = false;
+          _rateError = 'Error fetching rent rate: $e';
+          _fetchedRentRate = null;
+        });
+      }
+    }
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -265,6 +333,20 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           'rate': double.parse(_rateController.text),
           'narration': _narrationController.text.trim(),
           'inwardDate': Timestamp.fromDate(_selectedDate),
+          // Update rent rate information (only if no deliveries)
+          if (!_hasDeliveries && _fetchedRentRate != null) ...{
+            'rentType': _selectedRentType.toJson(),
+            'monthlyRatePerUnit': _selectedRentType == RentType.monthly
+                ? _fetchedRentRate?.monthlyRatePerUnit
+                : null,
+            'labourRatePerUnit': _selectedRentType == RentType.monthly
+                ? _fetchedRentRate?.labourRatePerUnit
+                : null,
+            'seasonalRatePerUnit': _selectedRentType == RentType.seasonal
+                ? _fetchedRentRate?.seasonalRatePerUnit
+                : null,
+            'gstPercentage': _fetchedRentRate?.gstPercentage,
+          },
         };
 
         await _firestoreService.updateReceipt(widget.receipt!.id!, updatedData);
@@ -287,6 +369,15 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           return;
         }
 
+        // Warn if rent rate is not fetched (but allow save)
+        if (_fetchedRentRate == null) {
+          showAppNotification(
+            context: context,
+            message: 'Warning: No rent rate configured for this cold storage and product. Receipt will be saved without rent information.',
+            type: NotificationType.warning,
+          );
+        }
+
         final newReceipt = Receipt(
           receiptNumber: receiptNumber,
           coldStorageName: _selectedColdStorage!,
@@ -298,6 +389,18 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           remainingQuantity: quantity,
           rate: double.parse(_rateController.text),
           narration: _narrationController.text.trim(),
+          // Store rent rate information (immutable) - null if no rate configured
+          rentType: _selectedRentType.toJson(),
+          monthlyRatePerUnit: _selectedRentType == RentType.monthly
+              ? _fetchedRentRate?.monthlyRatePerUnit
+              : null,
+          labourRatePerUnit: _selectedRentType == RentType.monthly
+              ? _fetchedRentRate?.labourRatePerUnit
+              : null,
+          seasonalRatePerUnit: _selectedRentType == RentType.seasonal
+              ? _fetchedRentRate?.seasonalRatePerUnit
+              : null,
+          gstPercentage: _fetchedRentRate?.gstPercentage ?? 18.0,
         );
 
         await _firestoreService.addReceipt(newReceipt.toJson());
@@ -347,11 +450,19 @@ class _ReceiptEntryScreenState extends State<ReceiptEntryScreen> {
           _selectedColdStorage = selection;
           _coldStorageController.text = selection;
           FocusScope.of(context).requestFocus(_dateFocusNode);
+          // Fetch rent rate if product is also selected
+          if (_selectedProduct != null) {
+            _fetchRentRate();
+          }
           break;
         case MasterType.product:
           _selectedProduct = selection;
           _productController.text = selection;
           FocusScope.of(context).requestFocus(_brandFocusNode);
+          // Fetch rent rate if cold storage is also selected
+          if (_selectedColdStorage != null) {
+            _fetchRentRate();
+          }
           break;
         case MasterType.brand:
           _selectedBrand = selection;
@@ -838,6 +949,248 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
                                         nextFocusNode: _quantityFocusNode,
                                       ),
                                     ],
+                                    const SizedBox(height: 20),
+
+                                    // Rent Type Selection
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.blue.shade200),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.account_balance_wallet,
+                                                color: Colors.blue.shade700, size: 20),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Rent Type *',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Colors.blue.shade900,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: InkWell(
+                                                  onTap: _hasDeliveries ? null : () {
+                                                    setState(() {
+                                                      _selectedRentType = RentType.monthly;
+                                                      _fetchRentRate();
+                                                    });
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(12),
+                                                    decoration: BoxDecoration(
+                                                      color: _selectedRentType == RentType.monthly
+                                                          ? Colors.blue.shade100
+                                                          : Colors.white,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(
+                                                        color: _selectedRentType == RentType.monthly
+                                                            ? Colors.blue.shade700
+                                                            : Colors.grey.shade300,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Radio<RentType>(
+                                                          value: RentType.monthly,
+                                                          groupValue: _selectedRentType,
+                                                          onChanged: _hasDeliveries ? null : (value) {
+                                                            setState(() {
+                                                              _selectedRentType = value!;
+                                                              _fetchRentRate();
+                                                            });
+                                                          },
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text(
+                                                                'Monthly',
+                                                                style: TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  color: _selectedRentType == RentType.monthly
+                                                                      ? Colors.blue.shade900
+                                                                      : Colors.black87,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                'Calculated per 15 days',
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: Colors.grey.shade600,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: InkWell(
+                                                  onTap: _hasDeliveries ? null : () {
+                                                    setState(() {
+                                                      _selectedRentType = RentType.seasonal;
+                                                      _fetchRentRate();
+                                                    });
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(12),
+                                                    decoration: BoxDecoration(
+                                                      color: _selectedRentType == RentType.seasonal
+                                                          ? Colors.orange.shade100
+                                                          : Colors.white,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(
+                                                        color: _selectedRentType == RentType.seasonal
+                                                            ? Colors.orange.shade700
+                                                            : Colors.grey.shade300,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Radio<RentType>(
+                                                          value: RentType.seasonal,
+                                                          groupValue: _selectedRentType,
+                                                          onChanged: _hasDeliveries ? null : (value) {
+                                                            setState(() {
+                                                              _selectedRentType = value!;
+                                                              _fetchRentRate();
+                                                            });
+                                                          },
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text(
+                                                                'Seasonal',
+                                                                style: TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  color: _selectedRentType == RentType.seasonal
+                                                                      ? Colors.orange.shade900
+                                                                      : Colors.black87,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                'Fixed for entire season',
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: Colors.grey.shade600,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Rent Rate Display
+                                    if (_isFetchingRate)
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Text('Fetching rent rate...'),
+                                          ],
+                                        ),
+                                      )
+                                    else if (_rateError != null)
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade50,
+                                          border: Border.all(color: Colors.orange.shade300),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                _rateError!,
+                                                style: TextStyle(color: Colors.orange.shade900),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    else if (_fetchedRentRate != null)
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.shade50,
+                                          border: Border.all(color: Colors.green.shade300),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(Icons.check_circle, color: Colors.green.shade700),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  'Rent Rate Found',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.green.shade900,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            if (_selectedRentType == RentType.monthly) ...[
+                                              _buildRateRow('Monthly Rate', '₹${_fetchedRentRate!.monthlyRatePerUnit}/unit/month'),
+                                              _buildRateRow('Labour Rate', '₹${_fetchedRentRate!.labourRatePerUnit}/unit'),
+                                            ] else ...[
+                                              _buildRateRow('Seasonal Rate', '₹${_fetchedRentRate!.seasonalRatePerUnit}/unit (fixed)'),
+                                            ],
+                                            _buildRateRow('GST', '${_fetchedRentRate!.gstPercentage}%'),
+                                          ],
+                                        ),
+                                      ),
                                     const SizedBox(height: 16),
                                     if (isWide)
                                       Row(
@@ -1103,6 +1456,31 @@ Future<Map<String, dynamic>?> _showProductDialog(String initialName) async {
               ),
             );
           },
+    );
+  }
+
+  Widget _buildRateRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 14,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -2,6 +2,8 @@
 
 import 'package:cold_storage/models/delivery_model.dart';
 import 'package:cold_storage/models/receipt_model.dart';
+import 'package:cold_storage/models/rent_rate.dart';
+import 'package:cold_storage/models/rent_bill.dart';
 import 'package:cold_storage/services/referential_integrity_service.dart';
 import 'package:cold_storage/services/delivery_validation_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -424,6 +426,170 @@ class FirestoreService {
       receiptNumber: receiptNumber,
       coldStorageName: coldStorageName,
     );
+  }
+
+  // ─── Rent Rates ────────────────────────────────────────────────────────
+
+  /// Retrieves a stream of all rent rates, ordered by cold storage and product name.
+  Stream<List<RentRate>> getRentRates() {
+    return _db
+        .collection('rent_rates')
+        .orderBy('coldStorageName')
+        .orderBy('productName')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => RentRate.fromFirestore(doc))
+              .toList(),
+        );
+  }
+
+  /// Adds a new rent rate document to the 'rent_rates' collection.
+  Future<void> addRentRate(RentRate rentRate) {
+    return _db.collection('rent_rates').add(rentRate.toJson());
+  }
+
+  /// Updates an existing rent rate document in Firestore.
+  Future<void> updateRentRate(String id, RentRate rentRate) {
+    return _db.collection('rent_rates').doc(id).update(rentRate.toJson());
+  }
+
+  /// Deletes a rent rate document from Firestore.
+  Future<void> deleteRentRate(String id) {
+    return _db.collection('rent_rates').doc(id).delete();
+  }
+
+  /// Checks if a rent rate already exists for a product-cold storage combination.
+  Future<bool> doesRentRateExist({
+    required String productName,
+    required String coldStorageName,
+    String? excludeId,
+  }) async {
+    var query = _db
+        .collection('rent_rates')
+        .where('productName', isEqualTo: productName)
+        .where('coldStorageName', isEqualTo: coldStorageName);
+
+    final snapshot = await query.get();
+
+    if (excludeId != null) {
+      // If updating, exclude the current document
+      return snapshot.docs.any((doc) => doc.id != excludeId);
+    }
+
+    return snapshot.docs.isNotEmpty;
+  }
+
+  /// Gets a rent rate for a specific product-cold storage combination.
+  Future<RentRate?> getRentRateFor({
+    required String productName,
+    required String coldStorageName,
+  }) async {
+    final snapshot = await _db
+        .collection('rent_rates')
+        .where('productName', isEqualTo: productName)
+        .where('coldStorageName', isEqualTo: coldStorageName)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+
+    return RentRate.fromFirestore(snapshot.docs.first);
+  }
+
+  // ─── Rent Bills ────────────────────────────────────────────────────────
+
+  /// Retrieves a stream of all rent bills, ordered by generation date.
+  Stream<List<RentBill>> getRentBills() {
+    return _db
+        .collection('rent_bills')
+        .orderBy('generatedDate', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => RentBill.fromFirestore(doc))
+              .toList(),
+        );
+  }
+
+  /// Adds a new rent bill document to the 'rent_bills' collection.
+  Future<void> addRentBill(RentBill rentBill) {
+    return _db.collection('rent_bills').add(rentBill.toJson());
+  }
+
+  /// Updates an existing rent bill document in Firestore.
+  Future<void> updateRentBill(String id, RentBill rentBill) {
+    return _db.collection('rent_bills').doc(id).update(rentBill.toJson());
+  }
+
+  /// Deletes a rent bill document from Firestore.
+  Future<void> deleteRentBill(String id) {
+    return _db.collection('rent_bills').doc(id).delete();
+  }
+
+  /// Checks if a rent bill already exists for a receipt.
+  Future<bool> doesRentBillExistForReceipt(String receiptId) async {
+    final snapshot = await _db
+        .collection('rent_bills')
+        .where('receiptId', isEqualTo: receiptId)
+        .limit(1)
+        .get();
+
+    return snapshot.docs.isNotEmpty;
+  }
+
+  /// Gets a rent bill for a specific receipt.
+  Future<RentBill?> getRentBillForReceipt(String receiptId) async {
+    final snapshot = await _db
+        .collection('rent_bills')
+        .where('receiptId', isEqualTo: receiptId)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+
+    return RentBill.fromFirestore(snapshot.docs.first);
+  }
+
+  /// Toggles the 'isPaid' status of a rent bill.
+  Future<void> toggleRentBillPaidStatus(String billId, bool currentStatus) {
+    return _db.collection('rent_bills').doc(billId).update({
+      'isPaid': !currentStatus,
+      'paymentDate':
+          !currentStatus ? FieldValue.serverTimestamp() : null,
+    });
+  }
+
+  /// Gets the next rent bill number (auto-increment).
+  Future<String> getNextRentBillNumber() async {
+    final now = DateTime.now();
+    final year = now.year;
+
+    // Get all bills from current year
+    final snapshot = await _db
+        .collection('rent_bills')
+        .where('billNumber', isGreaterThanOrEqualTo: 'RB/001/$year')
+        .where('billNumber', isLessThan: 'RB/001/${year + 1}')
+        .orderBy('billNumber', descending: true)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      // First bill of the year
+      return 'RB/001/$year';
+    }
+
+    // Extract number from last bill (e.g., "RB/042/2025" -> 42)
+    final lastBill = snapshot.docs.first.data()['billNumber'] as String;
+    final parts = lastBill.split('/');
+    final lastNumber = int.tryParse(parts[1]) ?? 0;
+    final nextNumber = lastNumber + 1;
+
+    return 'RB/${nextNumber.toString().padLeft(3, '0')}/$year';
   }
 }
 
