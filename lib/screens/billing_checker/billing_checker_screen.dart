@@ -117,8 +117,17 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   int _inwardQty(Receipt r) => r.inwardQuantity;
 
   List<Receipt> get _filteredReceipts {
+    // Calculate 3-year cutoff (current year + past 2 years)
+    final now = DateTime.now();
+    final cutoffYear = now.year - 2; // Keep current year + 2 previous years
+    final cutoffDate = DateTime(cutoffYear, 1, 1);
+
     final query = _selectedColdStorage.trim().toLowerCase();
     final list = _allReceipts.where((r) {
+      // Filter out receipts older than 3 years
+      final inwardDate = r.inwardDate.toDate();
+      if (inwardDate.isBefore(cutoffDate)) return false;
+
       final storageOk = query == 'all'
           ? true
           : r.coldStorageName.toLowerCase().contains(query); // substring match
