@@ -105,6 +105,31 @@ service cloud.firestore {
       allow update, delete: if isManager();
     }
 
+    // Product Master Data
+    match /products/{productId} {
+      allow read: if isActiveUser();
+      allow write: if isManager();
+    }
+
+    // Company Master Data
+    match /companies/{companyId} {
+      allow read: if isActiveUser();
+      allow write: if isManager();
+    }
+
+    // Rent Rate Master Data
+    match /rent_rates/{rateId} {
+      allow read: if isActiveUser();
+      allow write: if isManager();
+    }
+
+    // Rent Bills
+    match /rent_bills/{billId} {
+      allow read: if isActiveUser();
+      allow create: if isManager();
+      allow update, delete: if isManager();
+    }
+
     // System Settings (only super admin)
     match /settings/{settingId} {
       allow read: if isActiveUser();

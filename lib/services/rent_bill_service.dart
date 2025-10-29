@@ -7,6 +7,7 @@ import 'package:cold_storage/models/rent_bill_item.dart';
 import 'package:cold_storage/models/rent_type.dart';
 import 'package:cold_storage/models/receipt_model.dart';
 import 'package:cold_storage/services/rent_calculation_service.dart';
+import 'package:cold_storage/services/rent_rate_service.dart';
 
 /// Service for managing rent bills with Firestore integration.
 ///
@@ -18,6 +19,7 @@ class RentBillService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'rent_bills';
   final RentCalculationService _calcService = RentCalculationService.instance;
+  final RentRateService _rentRateService = RentRateService.instance;
 
   /// Get all rent bills as a stream
   Stream<List<RentBill>> getRentBillsStream() {
@@ -150,6 +152,37 @@ class RentBillService {
 
       final rentType = RentType.fromJson(receipt.rentType);
 
+      // Fetch live rates from Rent Master if receipt is unlocked
+      double? liveMonthlyRate;
+      double? liveLabourRate;
+      double? liveSeasonalRate;
+      double? liveGstRate;
+
+      if (!receipt.isRateLocked) {
+        debugPrint('🔓 Receipt unlocked - fetching live rates from Rent Master');
+        try {
+          final rentRate = await _rentRateService.getRateFor(
+            coldStorageName: receipt.coldStorageName,
+            productName: receipt.productName,
+            rentType: rentType,
+          );
+
+          if (rentRate != null) {
+            liveMonthlyRate = rentRate.monthlyRatePerUnit;
+            liveLabourRate = rentRate.labourRatePerUnit;
+            liveSeasonalRate = rentRate.seasonalRatePerUnit;
+            liveGstRate = rentRate.gstPercentage;
+            debugPrint('✅ Live rates fetched: Monthly=₹$liveMonthlyRate, Seasonal=₹$liveSeasonalRate, GST=$liveGstRate%');
+          } else {
+            debugPrint('⚠️ No rent rate found in Rent Master - using receipt snapshot');
+          }
+        } catch (e) {
+          debugPrint('❌ Error fetching live rates: $e - using receipt snapshot');
+        }
+      } else {
+        debugPrint('🔒 Receipt locked - using frozen rates from bill #${receipt.lockedByBillNumber}');
+      }
+
       // Build bill items from deliveries
       final List<RentBillItem> billItems = [];
       double totalRentAmount = 0.0;
@@ -171,18 +204,19 @@ class RentBillService {
             : 0.0;
 
         // Calculate amount based on rent type
+        // Use live rates if available (unlocked), otherwise use receipt snapshot (locked)
         double amount = 0.0;
         double ratePerUnit = 0.0;
 
         if (rentType == RentType.monthly) {
-          ratePerUnit = receipt.monthlyRatePerUnit ?? 0.0;
+          ratePerUnit = liveMonthlyRate ?? receipt.monthlyRatePerUnit ?? 0.0;
           amount = _calcService.calculateMonthlyRentAmount(
             quantity: quantity,
             months: months,
             ratePerUnit: ratePerUnit,
           );
         } else {
-          ratePerUnit = receipt.seasonalRatePerUnit ?? 0.0;
+          ratePerUnit = liveSeasonalRate ?? receipt.seasonalRatePerUnit ?? 0.0;
           amount = _calcService.calculateSeasonalRentAmount(
             quantity: quantity,
             ratePerUnit: ratePerUnit,
@@ -209,9 +243,10 @@ class RentBillService {
       }
 
       // Calculate labour charges (only for monthly rent)
+      // Use live rate if available (unlocked), otherwise use receipt snapshot
       double labourCharges = 0.0;
       if (rentType == RentType.monthly) {
-        final labourRate = receipt.labourRatePerUnit ?? 0.0;
+        final labourRate = liveLabourRate ?? receipt.labourRatePerUnit ?? 0.0;
         labourCharges = _calcService.calculateLabourCharges(
           totalReceiptQuantity: receipt.inwardQuantity.toDouble(),
           labourRatePerUnit: labourRate,
@@ -219,10 +254,12 @@ class RentBillService {
       }
 
       // Calculate totals
+      // Use live GST rate if available (unlocked), otherwise use receipt snapshot
+      final gstRate = liveGstRate ?? receipt.gstPercentage;
       final totals = _calcService.calculateBillTotals(
         totalRentAmount: totalRentAmount,
         labourCharges: labourCharges,
-        gstPercentage: receipt.gstPercentage,
+        gstPercentage: gstRate,
       );
 
       // Generate bill number
@@ -263,12 +300,76 @@ class RentBillService {
   /// Save rent bill to Firestore
   Future<String> saveBill(RentBill bill) async {
     try {
+      // Save the bill
       final docRef = await _firestore.collection(_collection).add(bill.toJson());
       debugPrint('✅ Rent bill saved with ID: ${docRef.id}');
+
+      // Lock the receipt rate to prevent future changes
+      await _lockReceiptRate(
+        receiptId: bill.receiptId,
+        billNumber: bill.billNumber,
+        rentType: bill.rentType,
+        monthlyRate: bill.rentType == RentType.monthly
+            ? bill.items.isNotEmpty ? bill.items.first.ratePerUnit : null
+            : null,
+        seasonalRate: bill.rentType == RentType.seasonal
+            ? bill.items.isNotEmpty ? bill.items.first.ratePerUnit : null
+            : null,
+        labourRate: bill.labourCharges > 0 && bill.items.isNotEmpty
+            ? bill.labourCharges / bill.items.fold<double>(0, (total, item) => total + item.quantity)
+            : null,
+        gstPercentage: (bill.sgst + bill.cgst) / bill.subtotalBeforeGst * 100,
+      );
+
       return docRef.id;
     } catch (e) {
       debugPrint('❌ Error saving rent bill: $e');
       rethrow;
+    }
+  }
+
+  /// Lock receipt rate after bill is saved (makes bill immutable)
+  Future<void> _lockReceiptRate({
+    required String receiptId,
+    required String billNumber,
+    required RentType rentType,
+    double? monthlyRate,
+    double? seasonalRate,
+    double? labourRate,
+    required double gstPercentage,
+  }) async {
+    try {
+      if (receiptId.isEmpty) {
+        debugPrint('⚠️ Cannot lock receipt: empty receipt ID');
+        return;
+      }
+
+      debugPrint('🔒 Locking receipt $receiptId with rates from bill $billNumber');
+
+      final updateData = <String, dynamic>{
+        'isRateLocked': true,
+        'rateLockDate': FieldValue.serverTimestamp(),
+        'lockedByBillNumber': billNumber,
+        'gstPercentage': gstPercentage,
+      };
+
+      // Store the actual rates used in the bill (snapshot at bill time)
+      if (rentType == RentType.monthly) {
+        if (monthlyRate != null) updateData['monthlyRatePerUnit'] = monthlyRate;
+        if (labourRate != null) updateData['labourRatePerUnit'] = labourRate;
+      } else {
+        if (seasonalRate != null) updateData['seasonalRatePerUnit'] = seasonalRate;
+      }
+
+      await _firestore
+          .collection('receipts')
+          .doc(receiptId)
+          .update(updateData);
+
+      debugPrint('✅ Receipt locked successfully');
+    } catch (e) {
+      debugPrint('❌ Error locking receipt: $e');
+      // Don't rethrow - bill was already saved, locking is secondary
     }
   }
 

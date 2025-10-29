@@ -533,12 +533,12 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton.icon(
-                    icon: const Icon(Icons.receipt),
-                    label: const Text('Generate Bill'),
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: const Text('Check Bill'),
                     onPressed: () {
                       Navigator.pushNamed(
                         context,
-                        AppRouter.rentBill,
+                        AppRouter.billingChecker,
                         arguments: receipt,
                       );
                     },

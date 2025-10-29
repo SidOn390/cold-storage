@@ -17,7 +17,7 @@ import 'screens/masters/product_master_screen.dart';
 import 'screens/masters/brand_master_screen.dart';
 import 'screens/masters/company_master_screen.dart';
 import 'screens/masters/rent_rate_master_screen.dart';
-import 'screens/billing/rent_bill_screen.dart';
+// import 'screens/billing/rent_bill_screen.dart'; // No longer needed - using Billing Checker
 import 'screens/admin/data_maintenance_screen.dart';
 import 'screens/admin/user_management_screen.dart';
 import 'screens/tools/backup_encryption_tools_screen.dart';
@@ -39,7 +39,7 @@ class AppRouter {
   static const brandMaster = '/masters/brands';
   static const companyMaster = '/masters/companies';
   static const rentRateMaster = '/masters/rent-rates';
-  static const rentBill = '/billing/rent-bill';
+  // static const rentBill = '/billing/rent-bill'; // Replaced by enhanced Billing Checker
   static const dataMaintenance = '/admin/data-maintenance';
   static const userManagement = '/admin/user-management';
   static const backupEncryptionTools = '/tools/backup-encryption';
@@ -78,8 +78,9 @@ class AppRouter {
           builder: (_) => screenBuilder(const DeliveryHistoryScreen()),
         );
       case billingChecker:
+        final receipt = settings.arguments as Receipt?;
         return MaterialPageRoute(
-          builder: (_) => screenBuilder(const BillingCheckerScreen()),
+          builder: (_) => screenBuilder(BillingCheckerScreen(initialDetailReceipt: receipt)),
         );
       case reports:
         return MaterialPageRoute(
@@ -109,12 +110,10 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => screenBuilder(const RentRateMasterScreen()),
         );
-      case rentBill:
-        // TODO: Will accept receipt as argument in Phase 3
-        // final receipt = settings.arguments as Receipt?;
-        return MaterialPageRoute(
-          builder: (_) => screenBuilder(const RentBillScreen()),
-        );
+      // case rentBill: // Replaced by enhanced Billing Checker
+      //   return MaterialPageRoute(
+      //     builder: (_) => screenBuilder(const RentBillScreen()),
+      //   );
       case dataMaintenance:
         return MaterialPageRoute(
           builder: (_) => screenBuilder(const DataMaintenanceScreen()),

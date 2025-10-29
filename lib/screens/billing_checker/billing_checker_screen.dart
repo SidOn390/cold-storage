@@ -12,7 +12,12 @@ import 'package:printing/printing.dart';
 
 import 'package:cold_storage/models/receipt_model.dart';
 import 'package:cold_storage/models/delivery_model.dart';
+import 'package:cold_storage/models/rent_bill.dart';
+import 'package:cold_storage/models/rent_bill_item.dart';
+import 'package:cold_storage/models/rent_type.dart';
 import 'package:cold_storage/services/firestore_service.dart';
+import 'package:cold_storage/services/rent_bill_service.dart';
+import 'package:cold_storage/services/user_management_service.dart';
 import 'package:cold_storage/utils/app_notifications.dart';
 import 'package:cold_storage/widgets/app_background.dart';
 
@@ -32,6 +37,8 @@ class BillingCheckerScreen extends StatefulWidget {
 
 class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
   final FirestoreService _firestore = FirestoreService();
+  final RentBillService _billService = RentBillService.instance;
+  final UserManagementService _userService = UserManagementService();
 
   // Data
   List<Receipt> _allReceipts = [];
@@ -46,6 +53,9 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
 
   // Detail view
   Receipt? _detailReceipt;
+  RentBill? _calculatedBill; // For rent calculation display
+  bool _isCalculatingBill = false;
+  bool _showDetailedBreakdown = false; // Toggle for line item details
 
   // Storage selector
   final TextEditingController _storageCtrl = TextEditingController(text: 'All');
@@ -61,6 +71,8 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
       _detailReceipt = widget.initialDetailReceipt;
       _selectedColdStorage = widget.initialDetailReceipt!.coldStorageName;
       _tab = widget.initialDetailReceipt!.isPaid ? 'Paid' : 'Unpaid';
+      // Calculate rent for initial receipt
+      _calculateRentBill(widget.initialDetailReceipt!);
     }
     _scroll.addListener(_onScrollLoadMore);
   }
@@ -154,16 +166,82 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
 
   // ====== Actions ======
 
+  Future<void> _calculateRentBill(Receipt receipt) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isCalculatingBill = true;
+      _calculatedBill = null;
+      _showDetailedBreakdown = false; // Reset when loading new receipt
+    });
+
+    try {
+      // Get deliveries for this receipt
+      final deliveries = await _firestore.getDeliveriesForReceipt(
+        receiptNumber: receipt.receiptNumber,
+        coldStorageName: receipt.coldStorageName,
+      );
+
+      if (deliveries.isEmpty) {
+        if (mounted) {
+          setState(() => _isCalculatingBill = false);
+        }
+        return;
+      }
+
+      // Generate rent bill calculation
+      final currentUser = await _userService.getCurrentUser();
+      final bill = await _billService.generateBillFromReceipt(
+        receipt: receipt,
+        deliveries: deliveries,
+        createdBy: currentUser?.displayName ?? 'System',
+      );
+
+      if (mounted) {
+        setState(() {
+          _calculatedBill = bill;
+          _isCalculatingBill = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCalculatingBill = false);
+        showAppNotification(
+          context: context,
+          message: 'Error calculating rent: $e',
+          type: NotificationType.error,
+        );
+      }
+    }
+  }
+
   Future<void> _togglePaid(Receipt r) async {
-    // For safety: only allow marking as paid if remaining == 0
-    if (!r.isPaid && _remainingFor(r) != 0) return;
+    final remaining = _remainingFor(r);
+
+    // Enhanced validation: Only allow marking as paid if all deliveries completed
+    if (!r.isPaid && remaining != 0) {
+      showAppNotification(
+        context: context,
+        message: 'Cannot mark as paid. Receipt has $remaining units remaining. Complete all deliveries first.',
+        type: NotificationType.error,
+      );
+      return;
+    }
+
+    // Show amount in confirmation if available
+    String amountText = '';
+    if (_calculatedBill != null) {
+      amountText = '\n\nCalculated Amount: ₹${_calculatedBill!.finalAmount.toStringAsFixed(0)}';
+    }
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(r.isPaid ? 'Unmark as Paid?' : 'Mark as Paid?'),
         content: Text(
-          'Are you sure you want to ${r.isPaid ? 'unmark' : 'mark'} this receipt as paid?',
+          r.isPaid
+              ? 'Are you sure you want to unmark receipt #${r.receiptNumber} as paid?'
+              : 'Confirm marking receipt #${r.receiptNumber} as paid?$amountText',
         ),
         actions: [
           TextButton(
@@ -172,7 +250,10 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('OK'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: r.isPaid ? Colors.orange : Colors.green,
+            ),
+            child: Text(r.isPaid ? 'Unmark' : 'Mark Paid'),
           ),
         ],
       ),
@@ -345,6 +426,215 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
     if (!mounted) return;
   }
 
+  Future<void> _exportDetailedRentBillPdf(Receipt r) async {
+    if (_calculatedBill == null) {
+      showAppNotification(
+        context: context,
+        message: 'No rent calculation available to export',
+        type: NotificationType.error,
+      );
+      return;
+    }
+
+    try {
+      await Printing.layoutPdf(
+        onLayout: (format) => _buildDetailedRentBillPdf(r, _calculatedBill!, format),
+      );
+    } catch (_) {
+      final bytes = await _buildDetailedRentBillPdf(r, _calculatedBill!, PdfPageFormat.a4);
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'detailed_bill_${r.receiptNumber}.pdf',
+      );
+    }
+  }
+
+  Future<Uint8List> _buildDetailedRentBillPdf(
+    Receipt receipt,
+    RentBill bill,
+    PdfPageFormat format,
+  ) async {
+    final doc = pw.Document();
+    final rentType = bill.rentType;
+
+    // Sort line items by date
+    final sortedItems = bill.items.toList()
+      ..sort((a, b) => a.outwardDate.compareTo(b.outwardDate));
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: format,
+        margin: const pw.EdgeInsets.all(20),
+        build: (_) => [
+          // Header
+          pdfu.h1('DETAILED RENT BILL'),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Receipt #${receipt.receiptNumber}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                  pw.Text('Company: ${receipt.companyName}'),
+                  pw.Text('Product: ${receipt.productName}'),
+                  pw.Text('Cold Storage: ${receipt.coldStorageName}'),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('Bill #${bill.billNumber}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Date: ${DateFormat('dd-MM-yyyy').format(bill.billDate)}'),
+                  pw.Text('Type: ${rentType.displayName}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+          pw.Divider(),
+          pw.SizedBox(height: 16),
+
+          // Line items header
+          pw.Text('DELIVERY BREAKDOWN',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+          pw.SizedBox(height: 12),
+
+          // Line items
+          ...sortedItems.asMap().entries.map((entry) {
+            final index = entry.key + 1;
+            final item = entry.value;
+
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 12),
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('$index. ${DateFormat('dd-MM-yyyy').format(item.outwardDate)}',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Quantity: ${item.quantity} units',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                  pw.SizedBox(height: 6),
+                  if (rentType == RentType.monthly)
+                    pw.Text('Days Stored: ${item.daysStored} days → ${item.months.toStringAsFixed(2)} months',
+                        style: const pw.TextStyle(fontSize: 10))
+                  else
+                    pw.Text('Days Stored: ${item.daysStored} days',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text('Rate: ₹${item.ratePerUnit}${rentType == RentType.monthly ? '/unit/month' : '/unit'}',
+                      style: const pw.TextStyle(fontSize: 10)),
+                  pw.SizedBox(height: 6),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    color: PdfColors.grey100,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('Calculation:',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          rentType == RentType.monthly
+                              ? '${item.quantity} × ${item.months.toStringAsFixed(2)} × ₹${item.ratePerUnit} = ₹${item.amount.toStringAsFixed(2)}'
+                              : '${item.quantity} × ₹${item.ratePerUnit} = ₹${item.amount.toStringAsFixed(2)}',
+                          style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.Divider(height: 10),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Line Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('₹${item.amount.toStringAsFixed(2)}',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+
+          pw.SizedBox(height: 16),
+          pw.Divider(thickness: 2),
+          pw.SizedBox(height: 12),
+
+          // Summary section
+          pw.Text('BILL SUMMARY',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+          pw.SizedBox(height: 8),
+
+          if (rentType == RentType.monthly) ...[
+            _pdfRow('Total Rent', '₹${bill.totalRentAmount.toStringAsFixed(2)}'),
+            _pdfRow('Labour Charges (${receipt.inwardQuantity} units × ₹${bill.labourCharges / receipt.inwardQuantity})',
+                '₹${bill.labourCharges.toStringAsFixed(2)}'),
+            _pdfRow('Subtotal', '₹${bill.subtotalBeforeGst.toStringAsFixed(2)}', bold: true),
+          ] else
+            _pdfRow('Total Amount', '₹${bill.subtotalBeforeGst.toStringAsFixed(2)}', bold: true),
+
+          pw.Divider(height: 16),
+          _pdfRow('SGST (9%)', '₹${bill.sgst.toStringAsFixed(2)}'),
+          _pdfRow('CGST (9%)', '₹${bill.cgst.toStringAsFixed(2)}'),
+          if (bill.roundOff != 0.0)
+            _pdfRow('Round-off', '${bill.roundOff >= 0 ? '+' : ''}₹${bill.roundOff.toStringAsFixed(2)}'),
+          pw.Divider(height: 16, thickness: 2),
+
+          // Final amount
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            color: PdfColors.green50,
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('FINAL AMOUNT',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                pw.Text('₹${bill.finalAmount.toStringAsFixed(0)}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+          ),
+
+          pw.SizedBox(height: 20),
+          pw.Text('Generated on: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  pw.Widget _pdfRow(String label, String value, {bool bold = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                  fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+          pw.Text(value,
+              style: pw.TextStyle(
+                  fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+        ],
+      ),
+    );
+  }
+
   // ====== Cold Storage selector (bottom sheet trigger) ======
 
   Widget _buildColdStorageSelector() {
@@ -513,7 +803,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Showing $_selectedColdStorage · ${scope.length} receipts (${scopeUnpaid} unpaid)',
+                        'Showing $_selectedColdStorage · ${scope.length} receipts ($scopeUnpaid unpaid)',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -580,7 +870,10 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
 
     return Card(
       child: InkWell(
-        onTap: () => setState(() => _detailReceipt = r),
+        onTap: () {
+          setState(() => _detailReceipt = r);
+          _calculateRentBill(r);
+        },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -608,7 +901,7 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.15),
+                            color: Colors.blue.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -704,6 +997,9 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            // Rent Calculation Card
+            _buildRentCalculationCard(r),
+            const SizedBox(height: 12),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -790,6 +1086,18 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
                   label: const Text('Export Detail PDF'),
                 ),
                 const SizedBox(width: 12),
+                // Show detailed rent bill PDF export only when calculation is available
+                if (_calculatedBill != null) ...[
+                  FilledButton.icon(
+                    onPressed: () => _exportDetailedRentBillPdf(r),
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: const Text('Export Rent Bill PDF'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 FilledButton.icon(
                   onPressed: (!paid && remaining != 0)
                       ? null
@@ -803,6 +1111,366 @@ class _BillingCheckerScreenState extends State<BillingCheckerScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRentCalculationCard(Receipt receipt) {
+    final rentType = RentType.fromJson(receipt.rentType);
+    final hasRateInfo = rentType == RentType.monthly
+        ? (receipt.monthlyRatePerUnit != null || receipt.isRateLocked == false)
+        : (receipt.seasonalRatePerUnit != null || receipt.isRateLocked == false);
+
+    return Card(
+      color: Colors.blue.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.calculate_outlined, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  'Rent Calculation',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: rentType == RentType.monthly
+                        ? Colors.blue.shade700
+                        : Colors.orange.shade700,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    rentType.displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+
+            if (_isCalculatingBill)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (!hasRateInfo)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No rent rate configured in Rent Master for this combination.',
+                        style: TextStyle(color: Colors.orange.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (_calculatedBill == null)
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text('No deliveries to calculate rent.'),
+              )
+            else
+              Column(
+                children: [
+                  // Show rate lock status
+                  if (receipt.isRateLocked)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Rate locked by Bill #${receipt.lockedByBillNumber}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade700,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.sync, size: 14, color: Colors.green.shade600),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Using live rates from Rent Master',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.green.shade700,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Calculation breakdown
+                  if (rentType == RentType.monthly) ...[
+                    _buildCalcRow('Total Rent', '₹${_calculatedBill!.totalRentAmount.toStringAsFixed(2)}'),
+                    _buildCalcRow('Labour Charges', '₹${_calculatedBill!.labourCharges.toStringAsFixed(2)}'),
+                    _buildCalcRow('Subtotal', '₹${_calculatedBill!.subtotalBeforeGst.toStringAsFixed(2)}', bold: true),
+                  ] else
+                    _buildCalcRow('Total Amount', '₹${_calculatedBill!.subtotalBeforeGst.toStringAsFixed(2)}', bold: true),
+
+                  const Divider(height: 20),
+                  _buildCalcRow('SGST (9%)', '₹${_calculatedBill!.sgst.toStringAsFixed(2)}'),
+                  _buildCalcRow('CGST (9%)', '₹${_calculatedBill!.cgst.toStringAsFixed(2)}'),
+                  if (_calculatedBill!.roundOff != 0.0)
+                    _buildCalcRow(
+                      'Round-off',
+                      '${_calculatedBill!.roundOff >= 0 ? '+' : ''}₹${_calculatedBill!.roundOff.toStringAsFixed(2)}',
+                    ),
+                  const Divider(height: 20),
+
+                  // Toggle button for detailed breakdown
+                  Center(
+                    child: TextButton.icon(
+                      icon: Icon(_showDetailedBreakdown
+                          ? Icons.expand_less
+                          : Icons.expand_more),
+                      label: Text(_showDetailedBreakdown
+                          ? 'Hide Detail View'
+                          : 'View Detail View'),
+                      onPressed: () {
+                        setState(() {
+                          _showDetailedBreakdown = !_showDetailedBreakdown;
+                        });
+                      },
+                    ),
+                  ),
+
+                  // Expandable detailed breakdown
+                  if (_showDetailedBreakdown) ...[
+                    const Divider(height: 20),
+                    Text(
+                      'Detailed View',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...(_calculatedBill!.items.toList()
+                          ..sort((a, b) => a.outwardDate.compareTo(b.outwardDate)))
+                        .asMap()
+                        .entries
+                        .map((entry) => _buildLineItemDetail(entry.key + 1, entry.value)),
+                    const Divider(height: 20),
+                  ],
+
+                  // Final amount - prominent display
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.shade300, width: 2),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'FINAL AMOUNT',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade900,
+                          ),
+                        ),
+                        Text(
+                          '₹${_calculatedBill!.finalAmount.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalcRow(String label, String value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLineItemDetail(int index, RentBillItem item) {
+    final rentType = _calculatedBill?.rentType ?? RentType.monthly;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$index',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('dd-MM-yyyy').format(item.outwardDate),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Qty: ${item.quantity}',
+                  style: TextStyle(
+                    color: Colors.blue.shade900,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                rentType == RentType.monthly
+                    ? '${item.daysStored} days → ${item.months.toStringAsFixed(2)} months'
+                    : '${item.daysStored} days',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.currency_rupee, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                rentType == RentType.monthly
+                    ? 'Rate: ₹${item.ratePerUnit}/unit/month'
+                    : 'Rate: ₹${item.ratePerUnit}/unit',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Line Total:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              Text(
+                '₹${item.amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

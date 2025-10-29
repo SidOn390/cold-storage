@@ -25,6 +25,11 @@ class Receipt {
   final double? seasonalRatePerUnit; // For seasonal rent
   final double gstPercentage; // Default 18%
 
+  // Rate locking fields (for bill immutability)
+  final bool isRateLocked; // If true, rate is frozen and won't update from Rent Master
+  final Timestamp? rateLockDate; // When the rate was locked
+  final String? lockedByBillNumber; // Which bill locked this rate
+
   Receipt({
     this.id,
     required this.receiptNumber,
@@ -45,6 +50,9 @@ class Receipt {
     this.labourRatePerUnit,
     this.seasonalRatePerUnit,
     this.gstPercentage = 18.0,
+    this.isRateLocked = false, // Default: use live rates from Rent Master
+    this.rateLockDate,
+    this.lockedByBillNumber,
   });
 
   Map<String, dynamic> toJson() {
@@ -67,6 +75,9 @@ class Receipt {
       'labourRatePerUnit': labourRatePerUnit,
       'seasonalRatePerUnit': seasonalRatePerUnit,
       'gstPercentage': gstPercentage,
+      'isRateLocked': isRateLocked,
+      'rateLockDate': rateLockDate,
+      'lockedByBillNumber': lockedByBillNumber,
     };
   }
 
@@ -92,6 +103,9 @@ class Receipt {
       labourRatePerUnit: data['labourRatePerUnit']?.toDouble(),
       seasonalRatePerUnit: data['seasonalRatePerUnit']?.toDouble(),
       gstPercentage: data['gstPercentage']?.toDouble() ?? 18.0,
+      isRateLocked: data['isRateLocked'] ?? false, // Default to unlocked for existing receipts
+      rateLockDate: data['rateLockDate'],
+      lockedByBillNumber: data['lockedByBillNumber'],
     );
   }
   
@@ -118,6 +132,9 @@ class Receipt {
     double? labourRatePerUnit,
     double? seasonalRatePerUnit,
     double? gstPercentage,
+    bool? isRateLocked,
+    Timestamp? rateLockDate,
+    String? lockedByBillNumber,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -139,6 +156,9 @@ class Receipt {
       labourRatePerUnit: labourRatePerUnit ?? this.labourRatePerUnit,
       seasonalRatePerUnit: seasonalRatePerUnit ?? this.seasonalRatePerUnit,
       gstPercentage: gstPercentage ?? this.gstPercentage,
+      isRateLocked: isRateLocked ?? this.isRateLocked,
+      rateLockDate: rateLockDate ?? this.rateLockDate,
+      lockedByBillNumber: lockedByBillNumber ?? this.lockedByBillNumber,
     );
   }
 }
